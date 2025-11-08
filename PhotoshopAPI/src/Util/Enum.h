@@ -35,10 +35,13 @@ namespace
 	inline std::optional<std::vector<KeyType>> findMultipleByValue(const std::unordered_map<KeyType, ValueType>& map, const ValueType searchValue)
 	{
 		std::vector<KeyType> results;
+		std::cout << "trying to find key in map" << (int) searchValue << std::endl;
 		for (const auto& pair : map)
 		{
+			std::cout << "... key in map is: " << pair.first << std::endl;
 			if (pair.second == searchValue)
 			{
+				std::cout << "..... found a match for: " << pair.first << std::endl;
 				results.push_back(pair.first);
 			}
 		}
@@ -204,7 +207,10 @@ namespace Enum
 		DisplayInfo,
 		PrintInformation,
 		PrintStyle,
-		PrintFlagsInfo
+		PrintFlagsInfo,
+		WorkingPath,
+		PathInformation,
+		ClippingMaskName
 	};
 
 	namespace {
@@ -914,6 +920,7 @@ namespace Enum
 	template <>
 	inline std::optional<std::vector<std::string>> getTaggedBlockKey(TaggedBlockKey key)
 	{
+		std::cout << "getting tagged block key "<< std::endl;
 		return findMultipleByValue(taggedBlockMap, key);
 	}
 

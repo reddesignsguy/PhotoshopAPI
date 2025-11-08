@@ -16,6 +16,7 @@
 #include "ProtectedSettingTaggedBlock.h"
 #include "ReferencePointTaggedBlock.h"
 #include "UnicodeLayerNameTaggedBlock.h"
+#include "VectorMaskTaggedBlock.h"
 
 PSAPI_NAMESPACE_BEGIN
 
@@ -34,6 +35,7 @@ template <typename T>
 std::shared_ptr<T> TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const
 {
 	// iterate all tagged blocks and compare keys as well as trying to cast the pointer
+	std::cout << "apatriawan getting tagged view" << std::endl;
 	for (auto& taggedBlock : m_TaggedBlocks)
 	{
 		if (taggedBlock->getKey() == key)
@@ -61,14 +63,17 @@ template std::shared_ptr<PlacedLayerTaggedBlock>		TaggedBlockStorage::getTaggedB
 template std::shared_ptr<PlacedLayerDataTaggedBlock>	TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const;
 template std::shared_ptr<LinkedLayerTaggedBlock>		TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const;
 
+template std::shared_ptr<VectorMaskTaggedBlock>		TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const;
 
 template <typename T>
 std::shared_ptr<T> TaggedBlockStorage::getTaggedBlockView() const
 {
 	for (auto& taggedBlock : m_TaggedBlocks)
 	{
+		std::cout <<".. tagged block key found: "  << static_cast<int>(taggedBlock->getKey()) << std::endl;
 		if (std::shared_ptr<T> downcastedPtr = std::dynamic_pointer_cast<T>(taggedBlock))
 		{
+		std::cout <<"chose this key"  <<  static_cast<int>(taggedBlock->getKey()) << std::endl;
 			return downcastedPtr;
 		}
 	}
@@ -87,7 +92,7 @@ template std::shared_ptr<ProtectedSettingTaggedBlock>	TaggedBlockStorage::getTag
 template std::shared_ptr<PlacedLayerTaggedBlock>		TaggedBlockStorage::getTaggedBlockView() const;
 template std::shared_ptr<PlacedLayerDataTaggedBlock>	TaggedBlockStorage::getTaggedBlockView() const;
 template std::shared_ptr<LinkedLayerTaggedBlock>		TaggedBlockStorage::getTaggedBlockView() const;
-
+template std::shared_ptr<VectorMaskTaggedBlock>		TaggedBlockStorage::getTaggedBlockView() const;
 
 template <typename T>
 std::vector<std::shared_ptr<T>> TaggedBlockStorage::get_tagged_blocks() const
@@ -116,7 +121,7 @@ template std::vector<std::shared_ptr<ProtectedSettingTaggedBlock>>	TaggedBlockSt
 template std::vector<std::shared_ptr<PlacedLayerTaggedBlock>>		TaggedBlockStorage::get_tagged_blocks() const;
 template std::vector<std::shared_ptr<PlacedLayerDataTaggedBlock>>	TaggedBlockStorage::get_tagged_blocks() const;
 template std::vector<std::shared_ptr<LinkedLayerTaggedBlock>>		TaggedBlockStorage::get_tagged_blocks() const;
-
+template std::vector<std::shared_ptr<VectorMaskTaggedBlock>>		TaggedBlockStorage::get_tagged_blocks() const;
 
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -202,6 +207,14 @@ const std::shared_ptr<TaggedBlock> TaggedBlockStorage::readTaggedBlock(File& doc
 			lrLinkedTaggedBlock->read(document, header, offset, taggedBlock.value(), signature, padding);
 			this->m_TaggedBlocks.push_back(lrLinkedTaggedBlock);
 			return lrLinkedTaggedBlock;
+		}
+		else if (taggedBlock.value() == Enum::TaggedBlockKey::vecMaskSettings)
+		{
+			auto vecMaskTaggedBlock = std::make_shared<VectorMaskTaggedBlock>();
+			vecMaskTaggedBlock->read(document, header, offset, taggedBlock.value(), signature, padding);
+			this->m_TaggedBlocks.push_back(vecMaskTaggedBlock);
+			return vecMaskTaggedBlock;
+			std::cout << "apatriawan pushing vec mask tagged block!" << std::endl;
 		}
 		else
 		{

@@ -3,6 +3,7 @@
 #include "Macros.h"
 #include "Util/Enum.h"
 #include "Core/Struct/ImageChannel.h"
+#include "Core/Struct/PathResourceData.h"
 #include "PhotoshopFile/LayerAndMaskInformation.h"
 #include "PhotoshopFile/AdditionalLayerInfo.h"
 
@@ -15,6 +16,7 @@
 #include "Core/TaggedBlocks/ProtectedSettingTaggedBlock.h"
 #include "Core/TaggedBlocks/ReferencePointTaggedBlock.h"
 #include "Core/TaggedBlocks/UnicodeLayerNameTaggedBlock.h"
+#include "Core/TaggedBlocks/VectorMaskTaggedBlock.h"
 
 #include "MaskDataMixin.h"
 #include "LayeredFile/concepts.h"
@@ -203,6 +205,7 @@ struct Layer : public MaskMixin<T>
 	/// \param header The FileHeader providing overall file information.
 	Layer(const LayerRecord& layerRecord, ChannelImageData& channelImageData, const FileHeader& header)
 	{
+		std::cout << "inside Layer(..) constructor!" << std::endl;
 		m_ColorMode = header.m_ColorMode;
 		m_LayerName = layerRecord.m_LayerName.getString();
 		// To parse the blend mode we must actually check for the presence of the sectionDivider blendmode as this overrides the layerRecord
@@ -260,6 +263,7 @@ struct Layer : public MaskMixin<T>
 			auto& channelInfo = layerRecord.m_ChannelInformation[i];
 			if (channelInfo.m_ChannelID == MaskMixin<T>::s_mask_index)
 			{
+				std::cout << "found channel id = -2" << std::endl;
 				// Move the compressed image data into our LayerMask struct
 				auto channelPtr = channelImageData.extract_image_ptr(channelInfo.m_ChannelID);
 				if (channelPtr)
@@ -304,10 +308,18 @@ struct Layer : public MaskMixin<T>
 					m_CenterY = mask_bbox.center().y;					
 				}
 			}
-		}
+			else if (channelInfo.m_ChannelID == MaskMixin<T>::s_real_mask_index) // TODO change me
+			{
 
+				std::cout << "found channel id = -3" << std::endl;
+			}
+		}
+		
+		
+		std::cout << "apatriawan do we have additional layer info for this layer reocrd????" << std::endl;
 		if (layerRecord.m_AdditionalLayerInfo.has_value())
 		{
+		std::cout << "apatriawan we do!" << std::endl;
 			// Get the reference point (if it is there)
 			auto& additionalLayerInfo = layerRecord.m_AdditionalLayerInfo.value();
 			auto reference_point = additionalLayerInfo.get_tagged_block<ReferencePointTaggedBlock>();
@@ -323,7 +335,17 @@ struct Layer : public MaskMixin<T>
 			{
 				m_LayerName = unicode_name->m_Name.string();
 			}
+			
+				std::cout << "apatriawan vector mask abt to be read in layeredfile constructor??" << std::endl;
+			auto vector_mask_data = additionalLayerInfo.get_tagged_block<VectorMaskTaggedBlock>();
+			if (vector_mask_data)
+			{
+				std::cout << "apatriawan vector mask being read in layeredfile constructor" << std::endl;
+				m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
+				m_vecMaskFlags = vector_mask_data->m_flag;
+			}
 		}
+
 	}
 
 	virtual ~Layer() = default;
@@ -340,7 +362,8 @@ struct Layer : public MaskMixin<T>
 	///
 	/// \return A tuple containing LayerRecord and ChannelImageData representing the layer in the PhotoshopFile.
 	virtual std::tuple<LayerRecord, ChannelImageData> to_photoshop()
-	{
+	{	
+		std::cout << "apatriawan Layer.h->to_photoshop()" << std::endl;
 		std::vector<LayerRecords::ChannelInformation> channelInfo{};	// Just have this be empty
 		ChannelImageData channelData{};
 
@@ -351,8 +374,24 @@ struct Layer : public MaskMixin<T>
 		if (blockVec.size() > 0)
 		{
 			TaggedBlockStorage blockStorage = { blockVec };
+			for (auto taggedBlock : blockVec) 
+			{
+				auto key = taggedBlock->getKey();
+	std::optional<std::vector<std::string>> keyStr = Enum::getTaggedBlockKey<Enum::TaggedBlockKey, std::vector<std::string>>(key);
+				if (keyStr.has_value())
+				{
+					std::cout << (*keyStr)[0] << "was the block key found " << std::endl;
+				}
+				else
+				{
+					std::cout << "converting from blockKey to str didnt work" << std::endl;
+				}
+				std::cout <<"" << std::endl;
+			}
 			taggedBlocks.emplace(blockStorage);
 		}
+
+		
 
 		LayerRecord lrRecord(
 			PascalString(m_LayerName, 4u),	// Photoshop does sometimes explicitly write out the name such as '</Group 1>' to indicate what it belongs to 
@@ -401,6 +440,10 @@ protected:
 	float m_CenterY{};
 
 	Enum::ColorMode m_ColorMode = Enum::ColorMode::RGB;
+	
+	// Vector mask settings (version not suported yet)
+	uint32_t m_vecMaskFlags;
+	std::unique_ptr<PathResourceData> m_pathResourcesPtr;
 
 	/// Parse the layer mask passed as part of the parameters into m_LayerMask
 	void parse_mask(Params& parameters)
@@ -458,6 +501,15 @@ protected:
 		// Generate our LockedSettings Tagged block
 		auto protectionSettingsPtr = std::make_shared<ProtectedSettingTaggedBlock>(m_IsLocked);
 		blockVec.push_back(protectionSettingsPtr);
+		
+		std::cout << "generating tagged blocks"  << std::endl;	
+		if (m_pathResourcesPtr != nullptr)
+		{
+			std::cout << "adding the vector mask data to the tagged block generation" << std::endl;
+			auto vecMaskDataPtr = std::make_shared<VectorMaskTaggedBlock>(std::move(m_pathResourcesPtr),
+										      m_vecMaskFlags);
+			blockVec.push_back(vecMaskDataPtr);
+		}	
 
 		return blockVec;
 	}

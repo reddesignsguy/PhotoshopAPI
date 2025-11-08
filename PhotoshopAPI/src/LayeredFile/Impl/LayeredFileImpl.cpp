@@ -90,7 +90,7 @@ namespace _Impl
 			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeData) ||
 			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeContentData))
 		{
-			return std::make_shared<ShapeLayer<T>>();
+			return std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
 		}
 #undef CHECK_TAGGED_BLOCK
 
