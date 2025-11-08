@@ -16,6 +16,7 @@
 #include "ProtectedSettingTaggedBlock.h"
 #include "ReferencePointTaggedBlock.h"
 #include "UnicodeLayerNameTaggedBlock.h"
+#include "VectorMaskTaggedBlock.h"
 
 PSAPI_NAMESPACE_BEGIN
 
@@ -61,6 +62,7 @@ template std::shared_ptr<PlacedLayerTaggedBlock>		TaggedBlockStorage::getTaggedB
 template std::shared_ptr<PlacedLayerDataTaggedBlock>	TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const;
 template std::shared_ptr<LinkedLayerTaggedBlock>		TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const;
 
+template std::shared_ptr<VectorMaskTaggedBlock>		TaggedBlockStorage::getTaggedBlockView(const Enum::TaggedBlockKey key) const;
 
 template <typename T>
 std::shared_ptr<T> TaggedBlockStorage::getTaggedBlockView() const
@@ -87,7 +89,7 @@ template std::shared_ptr<ProtectedSettingTaggedBlock>	TaggedBlockStorage::getTag
 template std::shared_ptr<PlacedLayerTaggedBlock>		TaggedBlockStorage::getTaggedBlockView() const;
 template std::shared_ptr<PlacedLayerDataTaggedBlock>	TaggedBlockStorage::getTaggedBlockView() const;
 template std::shared_ptr<LinkedLayerTaggedBlock>		TaggedBlockStorage::getTaggedBlockView() const;
-
+template std::shared_ptr<VectorMaskTaggedBlock>		TaggedBlockStorage::getTaggedBlockView() const;
 
 template <typename T>
 std::vector<std::shared_ptr<T>> TaggedBlockStorage::get_tagged_blocks() const
@@ -116,7 +118,7 @@ template std::vector<std::shared_ptr<ProtectedSettingTaggedBlock>>	TaggedBlockSt
 template std::vector<std::shared_ptr<PlacedLayerTaggedBlock>>		TaggedBlockStorage::get_tagged_blocks() const;
 template std::vector<std::shared_ptr<PlacedLayerDataTaggedBlock>>	TaggedBlockStorage::get_tagged_blocks() const;
 template std::vector<std::shared_ptr<LinkedLayerTaggedBlock>>		TaggedBlockStorage::get_tagged_blocks() const;
-
+template std::vector<std::shared_ptr<VectorMaskTaggedBlock>>		TaggedBlockStorage::get_tagged_blocks() const;
 
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -203,6 +205,7 @@ const std::shared_ptr<TaggedBlock> TaggedBlockStorage::readTaggedBlock(File& doc
 			this->m_TaggedBlocks.push_back(lrLinkedTaggedBlock);
 			return lrLinkedTaggedBlock;
 		}
+		// TODO: Add read vmsk functionality
 		else
 		{
 			auto baseTaggedBlock = std::make_shared<TaggedBlock>();

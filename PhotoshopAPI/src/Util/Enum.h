@@ -204,7 +204,10 @@ namespace Enum
 		DisplayInfo,
 		PrintInformation,
 		PrintStyle,
-		PrintFlagsInfo
+		PrintFlagsInfo,
+		WorkingPath,
+		PathInformation,
+		ClippingMaskName
 	};
 
 	namespace {
