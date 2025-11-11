@@ -20,8 +20,6 @@ class PathRecord
 
 	public:
        		void write(File& document) const{};
-
-	protected:
 		enum Selector {
 			ClosedSubpathLengthRecord        = 0,
 			ClosedSubpathBezierKnotLinked    = 1,
@@ -33,6 +31,7 @@ class PathRecord
 			ClipboardRecord                  = 7,
 			InitialFillRuleRecord            = 8
 		};
+	protected:
 		PathRecord(Selector selector);
 		const int m_binaryPoint = 24;
 

@@ -3,6 +3,7 @@
 #include "Macros.h"
 #include "Util/Enum.h"
 #include "Core/Struct/ImageChannel.h"
+#include "Core/Struct/PathResourceData.h"
 #include "PhotoshopFile/LayerAndMaskInformation.h"
 #include "PhotoshopFile/AdditionalLayerInfo.h"
 
@@ -323,7 +324,15 @@ struct Layer : public MaskMixin<T>
 			{
 				m_LayerName = unicode_name->m_Name.string();
 			}
+			
+			auto vector_mask_data = additionalLayerInfo.get_tagged_block<VectorMaskTaggedBlock>();
+			if (vector_mask_data)
+			{
+				m_vecMaskDataPtr = std::make_shared<vector<PathResourceData>>
+							(std::move(vector_mask_data->m_pathResources));
+			}
 		}
+
 	}
 
 	virtual ~Layer() = default;
@@ -401,6 +410,8 @@ protected:
 	float m_CenterY{};
 
 	Enum::ColorMode m_ColorMode = Enum::ColorMode::RGB;
+	
+	std::shared_ptr<std::vector<PathResourceData>> m_vecMaskDataPtr;
 
 	/// Parse the layer mask passed as part of the parameters into m_LayerMask
 	void parse_mask(Params& parameters)
@@ -458,6 +469,10 @@ protected:
 		// Generate our LockedSettings Tagged block
 		auto protectionSettingsPtr = std::make_shared<ProtectedSettingTaggedBlock>(m_IsLocked);
 		blockVec.push_back(protectionSettingsPtr);
+		
+		auto vecMaskDataPtr = std::make_shared<std::vector<PathResourceData>>
+					(std::move(m_vecMaskDataPtr));
+		blockVec.push_back(vecMaskDataPtr);
 
 		return blockVec;
 	}

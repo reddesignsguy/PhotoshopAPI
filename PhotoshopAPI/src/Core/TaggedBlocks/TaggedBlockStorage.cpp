@@ -205,7 +205,13 @@ const std::shared_ptr<TaggedBlock> TaggedBlockStorage::readTaggedBlock(File& doc
 			this->m_TaggedBlocks.push_back(lrLinkedTaggedBlock);
 			return lrLinkedTaggedBlock;
 		}
-		// TODO: Add read vmsk functionality
+		else if (taggedBlock.value() == Enum::TaggedBlockKey::vecMaskSettings)
+		{
+			auto vecMaskTaggedBlock = std::make_shared<VectorMaskTaggedBlock>();
+			vecMaskTaggedBlock->read(document, header, offset, taggedBlock.value(), signature, padding);
+			this->m_TaggedBlocks.push_back(vecMaskTaggedBlock);
+			return vecMaskTaggedBlock;
+		}
 		else
 		{
 			auto baseTaggedBlock = std::make_shared<TaggedBlock>();
