@@ -1,0 +1,106 @@
+#include "Core/Struct/PathResourceData.h"
+
+PSAPI_NAMESPACE_BEGIN
+
+PathRecord::PathRecord(Selector selector) // TODO rename to BasePathRecord
+	{
+		m_selector = static_cast<uint16_t>(selector);
+	}	
+		
+//void PathRecord::write(File& document) const
+//{
+//
+//};
+
+//		template <typename T>
+//		void insertData(T data)
+//		{
+//			std::memcpy(m_selector.data() + m_dataOffset, &data, sizeof(T));
+//			m_dataOffset += sizeof(T);
+//		}
+//		
+//		// Byte-level info:
+//		// Each record is 26 bytes. Selector is 2 bytes so the rest of the data is 24
+//		uint16_t m_selector;
+//		std::array<uint8_t, 24> m_data = {};
+
+// using Point2D = Geometry::Point2D<float>;
+
+BezierKnotRecord::BezierKnotRecord(bool closed,
+			 bool linked,
+			 Point2D precedingControlPoint,
+			 Point2D anchorPoint,
+			 Point2D leavingControlPoint)
+				: PathRecord(closed
+					? (linked ? ClosedSubpathBezierKnotLinked: ClosedSubpathBezierKnotUnlinked)
+					: (linked ? OpenSubpathBezierKnotLinked: OpenSubpathBezierKnotUnlinked))
+	{
+		
+
+		insertData(static_cast<uint32_t>(precedingControlPoint.y * (1 << m_binaryPoint)));
+		insertData(static_cast<uint32_t>(precedingControlPoint.x * (1 << m_binaryPoint)));
+
+		insertData(static_cast<uint32_t>(anchorPoint.y * (1 << m_binaryPoint)));
+		insertData(static_cast<uint32_t>(anchorPoint.x * (1 << m_binaryPoint)));
+
+
+		insertData(static_cast<uint32_t>(leavingControlPoint.y * (1 << m_binaryPoint)));
+		insertData(static_cast<uint32_t>(leavingControlPoint.x * (1 << m_binaryPoint)));	
+	}
+
+
+SubpathLengthRecord::SubpathLengthRecord(bool closed, int numPoints)
+				: PathRecord(closed ? ClosedSubpathLengthRecord : OpenSubpathLengthRecord)
+{
+	insertData(static_cast<uint16_t>(numPoints));
+}
+
+
+void PathResourceData::read(File& document, const uint8_t padding)
+{
+	
+	uint16_t selector = ReadBinaryData<uint16_t>(document);
+
+	PathRecord record;
+	if (record == 6) // path fill rule record
+	{
+		// rest of the bytes are 0s
+	}
+	else if (record == 0 || record == 3) //  subpath length record (open or closed)
+	{
+		// bytes 2-3 = # of knots
+	}
+	else if (record == 1 || record == 2 || record == 4 || record == 5) // subpath bezier knot record (closed, open, linked, and unlinked)
+	{
+		// bytes 3-10, 11-18, 19-26 == points
+		switch (record)
+		{
+			case 1:
+				record = new BezierKnotRecord(closed, );
+				break;
+		}
+	}
+	else if (record == 7) // clipboard record
+	{
+	}
+	else if (record == 8) // initial fill rule record
+	{
+		// 2 byte record
+	}
+	else
+	{
+		// TODO: Throw error. Unexpected selector type
+	}
+
+
+
+}
+
+/// Write the stored UTF16 string to disk with a 4-byte length with the padding
+/// defined in the constructor
+void PathResourceData::write(File& document) const
+{
+	// Go through every record, and tell them to write
+}
+PSAPI_NAMESPACE_END
+

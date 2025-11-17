@@ -1,72 +1,33 @@
- #include "VectorMaskTaggedBlock.h"
+#include "Core/TaggedBlocks/VectorMaskTaggedBlock.h"
+#include "Core/FileIO/LengthMarkers.h"
 
-void VectorMaskUtils::readPathResources(File& document)
-{
-	// verify 1st block is pathfill
-	// second block is a subpath length record, clipboard record, or initial fill record
-	// subpath length records that says there are x knot records after this
-	// verify that there are x knot records after this
-	// we must ensure that all knot records have a "parent" subpath length record
-	auto flags = ReadBinaryData<uint32_t>(document);
-	m_IsLocked = flags & 128u;	// Check if the flags at bit 7 are true
-}
-
-// Read the next 26 bytes (assumes that we have space)
-void VectorMaskUtils::readPathResource(File& document)
-{
-//			ClosedSubpathLengthRecord        = 0,
-//			ClosedSubpathBezierKnotLinked    = 1,
-//			ClosedSubpathBezierKnotUnlinked  = 2,
-//			OpenSubpathLengthRecord          = 3,
-//			OpenSubpathBezierKnotLinked      = 4,
-//			OpenSubpathBezierKnotUnlinked    = 5,
-//			PathFillRuleRecord               = 6,
-//			ClipboardRecord                  = 7,
-//			InitialFillRuleRecord            = 8
-	// Get record type from first 2 bytes
-	uint16_t type = ReadBinaryData<uint16_t>(document);
-	switch (type)
-	{
-		// Create a factory that takes in the type and spits out a constructor
-		case PathRecord::Selector::PathFillRuleRecord 
-	};
-	// TODO: Address this concern from spec: For Windows, you should swap the bytes before accessing it as a short.)
-	// Based on record type.. branch out	
-}
-
-void VectorMaskUtils::parsePathResourceType(File& document)
-{
-
-}
-
-
-
-void VectorMaskTaggedBlock::read(File& document, const FileHeader& header, const uint64_t offset, const Enum::TaggedBlockKey key, const Signature signature, const uint16_t padding)
+// using this function assumes that a vector mask tagged block does indeed exist at the current document position
+void PhotoshopAPI::VectorMaskTaggedBlock::read(File& document, const FileHeader& header, const uint64_t offset, const Enum::TaggedBlockKey key, const Signature signature, const uint16_t padding)
 {
 	m_Key = key;
 	m_Offset = offset;
 	m_Signature = signature;
-
+	
 	m_Length = ReadBinaryData<uint32_t>(document);
 	auto len_offset = document.get_offset();
 
 	m_version = ReadBinaryData<uint32_t>(document);
-	m_flag = ReadBinaryData<uint32_t>(document); // TODO: Read this properly!!!
-	
-	
+	m_flag = ReadBinaryData<uint32_t>(document); // TODO: Read this properly!!
 
-	if (m_Version != 4 || descriptorVersion != 16)
+	// read all the records
+	m_pathResourceData = std::make_unique<PathResourceData>();
+	uint32_t lengthBeforePathRecords = 8; // is the length of the version and flag as seen in the above 2 lines
+	int numRecords = std::visit([&](auto &&length) { return static_cast<int>((length - lengthBeforePathRecords) / 26); }, m_Length);
+	for (int i = 0; i < numRecords; i ++)
 	{
-		PSAPI_LOG_ERROR("PlacedLayerData", "Unknown version or descriptor version encountered. Version: %d. Descriptor Version: %d. Expected 4 and 16 for these respectively", m_Version, descriptorVersion);
+		m_pathResourceData->read(document, padding);
 	}
 
-	m_Descriptor = std::make_unique<Descriptors::Descriptor>();
-	m_Descriptor->read(document);
 	// Manually skip to the end as this section may be padded
 	document.setOffset(len_offset + std::get<uint32_t>(m_Length));
 }
 
-void VectorMaskTaggedBlock::write(File& document, const FileHeader& header, ProgressCallback& callback, const uint16_t padding)
+void PhotoshopAPI::VectorMaskTaggedBlock::write(File& document, const FileHeader& header, ProgressCallback& callback, const uint16_t padding)
 {
 	WriteBinaryData<uint32_t>(document, Signature("8BIM").m_Value);
 	WriteBinaryData<uint32_t>(document, Signature("vmsk").m_Value);
@@ -75,9 +36,10 @@ void VectorMaskTaggedBlock::write(File& document, const FileHeader& header, Prog
 	WriteBinaryData<uint32_t>(document, m_flag);
 	
 	// the meat of vector masks	
-	for (auto& resource : m_pathResources)
+	for (auto& resource : m_pathResourceData->m_records)
 	{
-		resource.write(document);
+		// TODO: IMPLEMENT ME
+		// resource.write(document);
 	}
 
 	// verify 1st block is pathfill

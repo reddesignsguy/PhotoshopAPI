@@ -95,13 +95,10 @@ namespace VectorMask
 struct VectorMaskTaggedBlock : TaggedBlock
 {
 	int32_t m_version = 3;
-	int32_t m_flag = 0; // TODO: Allow other flags
-			    // TODO: Should be flags PLURAL
-	
-	VectorMaskTaggedBlock(std::unique_ptr<std::vector<PathResourceData>> pathResources, int32_t flag) : m_pathResources(std::move(pathResources)), m_flag(flag) {};	
-	// flags
-//	std::vector<LinkedLayerItem::Data> m_LayerData;	// A single LinkedLayer block may have multiple file descriptions stored in it
-	std::unique_ptr<std::vector<PathResourceData>> m_pathResources;
+	int32_t m_flag = 0; // TODO: Allow other flags and should be flags PLURAL
+	std::unique_ptr<PathResourceData> m_pathResourceData;
+	VectorMaskTaggedBlock(){}; // for reading
+	VectorMaskTaggedBlock(std::unique_ptr<PathResourceData> pathResource, int32_t flag) : m_pathResourceData(std::move(pathResource)), m_flag(flag) {}; // for creating from scratch	
 	void read(File& document, const FileHeader& header, const uint64_t offset, const Enum::TaggedBlockKey key, const Signature signature, const uint16_t padding);
 	void write(File& document, const FileHeader& header, ProgressCallback& callback, const uint16_t padding) override;
 };
