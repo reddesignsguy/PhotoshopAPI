@@ -862,6 +862,10 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		ChannelCoordinates coordinates = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
 
 		// If the channel is a mask the extents are actually stored in the layermaskdata
+		// TODO: Must update m_layerMaskInfo as mask data is treated as a channel
+		// When I remove the vector mask, the bin executes perfectly
+		// We have vector masks.. which are treated differently
+		// Pretty sure vector masks go through this block.. but do it again; Verify that vector mask PSD goes through this block but the one w/o the vector mask doesn't
 		if (channel.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask || channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask)
 		{
 			if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_LayerMask.has_value())
