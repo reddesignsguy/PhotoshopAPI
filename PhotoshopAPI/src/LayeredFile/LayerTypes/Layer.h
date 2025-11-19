@@ -16,6 +16,7 @@
 #include "Core/TaggedBlocks/ProtectedSettingTaggedBlock.h"
 #include "Core/TaggedBlocks/ReferencePointTaggedBlock.h"
 #include "Core/TaggedBlocks/UnicodeLayerNameTaggedBlock.h"
+#include "Core/TaggedBlocks/VectorMaskTaggedBlock.h"
 
 #include "MaskDataMixin.h"
 #include "LayeredFile/concepts.h"
@@ -328,8 +329,8 @@ struct Layer : public MaskMixin<T>
 			auto vector_mask_data = additionalLayerInfo.get_tagged_block<VectorMaskTaggedBlock>();
 			if (vector_mask_data)
 			{
-				m_vecMaskDataPtr = std::make_shared<vector<PathResourceData>>
-							(std::move(vector_mask_data->m_pathResources));
+				m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
+				m_vecMaskFlags = vector_mask_data->m_flag;
 			}
 		}
 
@@ -411,7 +412,9 @@ protected:
 
 	Enum::ColorMode m_ColorMode = Enum::ColorMode::RGB;
 	
-	std::shared_ptr<std::vector<PathResourceData>> m_vecMaskDataPtr;
+	// Vector mask settings (version not suported yet)
+	uint32_t m_vecMaskFlags;
+	std::unique_ptr<PathResourceData> m_pathResourcesPtr;
 
 	/// Parse the layer mask passed as part of the parameters into m_LayerMask
 	void parse_mask(Params& parameters)
@@ -470,8 +473,8 @@ protected:
 		auto protectionSettingsPtr = std::make_shared<ProtectedSettingTaggedBlock>(m_IsLocked);
 		blockVec.push_back(protectionSettingsPtr);
 		
-		auto vecMaskDataPtr = std::make_shared<std::vector<PathResourceData>>
-					(std::move(m_vecMaskDataPtr));
+		auto vecMaskDataPtr = std::make_shared<VectorMaskTaggedBlock>(std::move(m_pathResourcesPtr),
+					 				      m_vecMaskFlags);
 		blockVec.push_back(vecMaskDataPtr);
 
 		return blockVec;

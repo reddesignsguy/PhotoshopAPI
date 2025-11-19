@@ -94,7 +94,7 @@ namespace VectorMask
 /// Photoshop has 3 different ways of storing SmartObject data, either as Linked into the file, Linked to an external file or as an Alias (unknown)
 struct VectorMaskTaggedBlock : TaggedBlock
 {
-	int32_t m_version = 3;
+	int32_t m_version = 3; // TODO For now, just support 3, but in the future, we can support other versions?
 	int32_t m_flag = 0; // TODO: Allow other flags and should be flags PLURAL
 	std::unique_ptr<PathResourceData> m_pathResourceData;
 	VectorMaskTaggedBlock(){}; // for reading

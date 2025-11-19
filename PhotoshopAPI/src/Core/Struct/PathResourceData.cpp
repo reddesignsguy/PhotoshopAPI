@@ -55,21 +55,32 @@ PSAPI_NAMESPACE_BEGIN
 //{
 //	insertData(static_cast<uint16_t>(numPoints));
 //}
-
+void skipBytes(File& document, int skipNumBytes) // TODO: make this a util
+{
+	for (int i = 0; i < skipNumBytes; i++)
+	{
+		ReadBinaryData<uint8_t>(document);
+	}
+}
 
 void PathResourceData::read(File& document, const uint8_t padding)
 {
+	std::cout << "reading path resource" << std::endl;
 	uint16_t selector = ReadBinaryData<uint16_t>(document);
 	IPathRecord record;
 	if (selector == 6) // path fill rule record
 	{
+		std::cout << "path fill beizer knot" << std::endl;
 		record = PathFillRecord();
+		skipBytes(document, 24);
 	}
 	else if (selector == 0 || selector == 3) //  subpath length record (open or closed)
 	{
+		std::cout << "subpath length record" << std::endl;
 		uint16_t length = ReadBinaryData<uint16_t>(document);
 		bool closed = selector == 0; 
 		record = SubpathLengthRecord(closed, length);
+		skipBytes(document, 22);
 	}
 	else if (selector == 1 || selector == 2 || selector == 4 || selector == 5) // subpath bezier knot record (closed, open, linked, and unlinked)
 	{
@@ -88,28 +99,35 @@ void PathResourceData::read(File& document, const uint8_t padding)
 		switch (selector)
 		{
 			case 1:
+				std::cout << "Closed and linked beizer knot" << std::endl;
 				record = BezierKnotRecord(true, true,   preceding, anchor, leaving);
 				break;
 			case 2:
+				std::cout << "Closed and unlinked beizer knot" << std::endl;
 				record = BezierKnotRecord(true, false,  preceding, anchor, leaving);
 				break;
 			case 4:
+				std::cout << "Open and linked beizer knot" << std::endl;
 				record = BezierKnotRecord(false, true,  preceding, anchor, leaving);
 				break;
 			case 5:
+				std::cout << "Open and unlinked beizer knot" << std::endl;
 				record = BezierKnotRecord(false, false, preceding, anchor, leaving);
 				break;
 		}
 	}
 	else if (selector == 7) // clipboard record
 	{
+		std::cout << "clipboard fill record" << std::endl;
 		// TODO implement me
 		throw std::runtime_error("reading clipboard records not implemented yet!");
 	}
 	else if (selector == 8) // initial fill rule record
 	{
+		std::cout << "initial fill record" << std::endl;
 		bool startWithAllPixels = ReadBinaryData<uint16_t>(document) == 1;
 		record = InitialFillRecord(startWithAllPixels);
+		skipBytes(document, 22);
 	}
 	else
 	{
