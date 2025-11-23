@@ -240,6 +240,8 @@ void LayerRecords::LayerMaskData::read(File& document)
 
 	// Read the first layer mask, we dont yet know which one it is
 	{
+		
+		std::cout << "apatriawan this should be called cuz im a vmsk"<< std::endl;
 		LayerMask mask = LayerMask();
 
 		mask.m_Top = ReadBinaryData<int32_t>(document);
@@ -257,7 +259,7 @@ void LayerRecords::LayerMaskData::read(File& document)
 
 
 		const uint8_t bitFlags = ReadBinaryData<uint8_t>(document);
-		mask.setFlags(bitFlags);
+		mask.setFlags(bitFlags); // apatriawan = x18 or 0001 0010
 		toRead -= 1u;
 
 		// Store this value to compare against later
@@ -269,14 +271,20 @@ void LayerRecords::LayerMaskData::read(File& document)
 			toRead -= 1u;
 			toRead -= mask.readMaskParams(document);
 		}
-
+		
+		// TODO: Check me (apatriawan)
 		// Depending on the flags this is either a vector or layer mask
 		if ((bitFlags & 1u << 3) != 0u)
 		{
+		std::cout << "apatriawan this should be called cuz im a vmsk"<< std::endl;
+
+		std::cout << "i think this means bit 4 is enabled" << std::endl;
 			m_VectorMask.emplace(mask);
 		}
 		else
 		{
+		// apatriawan looks like debugger tries to go here, but it never prints this.. so i guess that's good?
+		std::cout << "ruh roh, why does it think we have a layer mask" << std::endl;
 			m_LayerMask.emplace(mask);
 		}
 	}
@@ -286,9 +294,12 @@ void LayerRecords::LayerMaskData::read(File& document)
 	// back into the real user mask instead (pixel mask)
 	if (toRead >= 18u)
 	{
+		// apatriawan looks like this gets evaluated. perhaps we have 2 masks?
+		// i wonder where the data is coming from
 		LayerMask layerMask = LayerMask();
 
 		const uint8_t bitFlags = ReadBinaryData<uint8_t>(document);
+		// apatriawan flags are 0xf
 		layerMask.setFlags(bitFlags);
 		toRead -= 1u;
 
@@ -815,6 +826,11 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 	ChannelCoordinates extent = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
 	uint32_t maxWidth = extent.width;
 	uint32_t maxHeight = extent.height;
+		// TODO: Must update m_layerMaskInfo as mask data is treated as a channel
+		// When I remove the vector mask, the bin executes perfectly
+		// We have vector masks.. which are treated differently
+		// Pretty sure vector masks go through this block.. but do it again; Verify that vector mask PSD goes through this block but the one w/o the vector mask doesn't
+		// Yes I'm correct, if i don't have a vmsk, then this doesn't execute
 	if (layerRecord.m_LayerMaskData.has_value())
 	{
 		if (layerRecord.m_LayerMaskData.value().m_LayerMask.has_value())
@@ -862,17 +878,23 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		ChannelCoordinates coordinates = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
 
 		// If the channel is a mask the extents are actually stored in the layermaskdata
-		// TODO: Must update m_layerMaskInfo as mask data is treated as a channel
-		// When I remove the vector mask, the bin executes perfectly
-		// We have vector masks.. which are treated differently
-		// Pretty sure vector masks go through this block.. but do it again; Verify that vector mask PSD goes through this block but the one w/o the vector mask doesn't
 		if (channel.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask || channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask)
 		{
-			if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_LayerMask.has_value())
+			//TODO (apatriawan) this only takes in a layer mask
+			// for some reason, this gets called when i'm sure that we don't have a layer mask enabled
+			// if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_LayerMask.has_value())
+			// apatriawan NICE! this seems to work!
+			if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_VectorMask.has_value())
 			{
-				const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
+				const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_VectorMask.value();
+
+				// const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
 				// Generate our coordinates from the mask extents instead
 				coordinates = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
+				std::cout << "top: " << mask.m_Top << ", left: " <<  mask.m_Left <<", bottom: " << mask.m_Bottom << ", right: "<< mask.m_Right << std::endl; 
+				// apatriawan getting weird values of:
+				//  top: 0, left: 0, bottom: -16777216, right: 0
+				//  might be garbo values? 
 			}
 		}
 		// Get the compression of the channel. We must read it this way as the offset has to be correct before parsing
@@ -888,7 +910,7 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		FileSection::size(FileSection::size() + channel.m_Size);
 
 		if (header.m_Depth == Enum::BitDepth::BD_8)
-		{
+		{ // TODO: (apatriawan) the buffer size is dependent on the extents, which vector mask supposdely has
 			std::span<uint8_t> bufferSpan(buffer.data(), coordinates.width * coordinates.height);
 			DecompressData<uint8_t>(stream, bufferSpan, channelOffset + 2u, channelCompression, header, coordinates.width, coordinates.height, channel.m_Size - 2u);
 			auto channelPtr = std::make_unique<channel_wrapper>(
