@@ -84,17 +84,25 @@ void PathResourceData::read(File& document, const uint8_t padding)
 	}
 	else if (selector == 1 || selector == 2 || selector == 4 || selector == 5) // subpath bezier knot record (closed, open, linked, and unlinked)
 	{
+		// TODO: Forgot that y-component is first (apatriawan)
+		// Change !!
 		Point2D preceding;
-	       	preceding.x = ReadBinaryData<uint32_t>(document);
 	       	preceding.y = ReadBinaryData<uint32_t>(document);
+	       	preceding.x = ReadBinaryData<uint32_t>(document);
+		double tmpX = ((preceding.x << 3) >> 3) / (double(1 << 24));
+		double tmpY = ((preceding.y << 3) >> 3) / (double(1 << 24));
 
+		std::cout << "preceding coords: " << preceding.x << ", "<< preceding.y << std::endl;
+		std::cout << "preceding coords: " << tmpX << ", "<< tmpY << std::endl;
 		Point2D anchor;
-	       	anchor.x = ReadBinaryData<uint32_t>(document);
 	       	anchor.y = ReadBinaryData<uint32_t>(document);
+	       	anchor.x = ReadBinaryData<uint32_t>(document);
+		std::cout << "anchor coords: " << anchor.x << ", "<< anchor.y << std::endl;
 
 		Point2D leaving;
-	       	leaving.x = ReadBinaryData<uint32_t>(document);
 	       	leaving.y = ReadBinaryData<uint32_t>(document);
+	       	leaving.x = ReadBinaryData<uint32_t>(document);
+		std::cout << "leaving coords: " << leaving.x << ", "<< leaving.y << std::endl;
 
 		switch (selector)
 		{
