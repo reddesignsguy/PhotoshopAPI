@@ -142,6 +142,7 @@ LayerInfo generate_layerinfo(LayeredFile<T>& layeredFile)
 template <typename T>
 std::tuple<LayerRecord, ChannelImageData> generate_layerdata(std::shared_ptr<Layer<T>> layer)
 {
+	std::cout << "apatriawan generate_layerdata" << std::endl;
 	auto lrData = layer->to_photoshop();
 	return lrData;
 }

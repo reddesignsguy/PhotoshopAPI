@@ -156,6 +156,7 @@ struct LayeredFile
 	/// \param file_path The path to the photoshop file
 	LayeredFile(std::unique_ptr<PhotoshopFile> file, std::filesystem::path file_path)
 	{
+		std::cout<< "apatriawan constructing layeredFile after reading the photoshop file!"<<std::endl;
 		// Take ownership of document
 		std::unique_ptr<PhotoshopFile> document = std::move(file);
 

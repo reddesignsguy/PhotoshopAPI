@@ -79,4 +79,15 @@ struct ICCProfileBlock : public ResourceBlock
 	void write(File& document) override;
 };
 
+struct PathBlock : public ResourceBlock
+{
+	// paths
+	// these resource blocks contain 26 byte path point records
+	// the paths are type 8BIM, and IDs range from 2000 -> 2997
+	// points are stored in 8 bytes as a pair of 32 bit components, vertical
+	// componennt first
+		
+};
+
+
 PSAPI_NAMESPACE_END

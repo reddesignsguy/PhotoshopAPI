@@ -95,7 +95,7 @@ uint32_t ImageResources::parseResourceBlock(File& document)
 		uint32_t blockSize = blockPtr->size<uint32_t>();
 		m_ResourceBlocks.emplace_back(std::move(blockPtr));
 		return blockSize;
-	}
+	} // add vector mask
 	else
 	{
 		// Skip the block

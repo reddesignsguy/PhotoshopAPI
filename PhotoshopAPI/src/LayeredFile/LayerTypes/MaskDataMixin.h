@@ -39,6 +39,8 @@ struct MaskMixin
 	/// Colormode independent mask index as Enum::ChannelIDInfo that may be used 
 	static constexpr auto s_mask_index = Enum::ChannelIDInfo{ Enum::ChannelID::UserSuppliedLayerMask, -2 };
 
+	static constexpr auto s_real_mask_index = Enum::ChannelIDInfo{ Enum::ChannelID::RealUserSuppliedLayerMask, -3 };
+
 	MaskMixin() = default;
 	MaskMixin(
 		channel_type data,
