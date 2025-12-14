@@ -79,32 +79,20 @@ struct Layer : public MaskMixin<T>
 	struct PathPoint {
 		PathPoint(Geometry::Point2D<int> preceding,
 			  Geometry::Point2D<int> anchor,
-			  Geometry::Point2D<int> leaving),
-			  bool linked	
+			  Geometry::Point2D<int> leaving) 
 				: m_preceding(preceding),
 				  m_anchor(anchor),
-				  m_leaving(leaving),
-				  m_linked(linked) {};
+				  m_leaving(leaving) {};
 
 		Geometry::Point2D<int> m_preceding;
 		Geometry::Point2D<int> m_anchor;
 		Geometry::Point2D<int> m_leaving;
-
-		bool getLinked()
-		{
-			return m_linked;
-		}
-
-		private:
-			bool m_linked;
 	};
 
 	struct SubPath
 	{
 		SubPath(std::vector<PathPoint> points, bool closed)
 			: m_points(points), m_closed(closed){};
-		SubPath(bool closed) : m_closed(closed){};
-
 		std::vector<PathPoint> m_points;
 		bool m_closed; // privatize me
 		
@@ -398,7 +386,6 @@ struct Layer : public MaskMixin<T>
 				std::cout << "apatriawan vector mask being read in layeredfile constructor" << std::endl;
 				m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
 				m_vecMaskFlags = vector_mask_data->m_flag;
-				
 			}
 		}
 
@@ -563,17 +550,16 @@ protected:
 		if (m_vectorMask != nullptr)
 		{
 			// TODO: generate the path ptr
-			auto pathResourcesPtr = generate_vector_mask();	
-			blockVec.push_back(pathResourcesPtr);
+			auto pathResourcesPtr = generate_vector_mask();		
 
 		}	
-	//	if (m_pathResourcesPtr != nullptr)
-	//	{
-	//		std::cout << "adding the vector mask data to the tagged block generation" << std::endl;
-	//		auto vecMaskDataPtr = std::make_shared<VectorMaskTaggedBlock>(std::move(m_pathResourcesPtr),
-	//									      m_vecMaskFlags);
-	//		blockVec.push_back(vecMaskDataPtr);
-	//	}	
+		if (m_pathResourcesPtr != nullptr)
+		{
+			std::cout << "adding the vector mask data to the tagged block generation" << std::endl;
+			auto vecMaskDataPtr = std::make_shared<VectorMaskTaggedBlock>(std::move(m_pathResourcesPtr),
+										      m_vecMaskFlags);
+			blockVec.push_back(vecMaskDataPtr);
+		}	
 
 		return blockVec;
 	}
@@ -660,8 +646,7 @@ protected:
 
 		return Geometry::Point2D<uint32>(finalX, finalY);
 	
-	}
-
+	}	
 	std::shared_ptr<PathResourceData> generate_vector_mask()
 	{
 		// Convert the PathPoints of the vector mask from raw canvas coordiantes
@@ -680,108 +665,23 @@ protected:
 		// add points
 		for (auto subPath : m_vectorMask->m_subPaths)
 		{
-			bool closed = subPath.m_closed;
-			auto subpathLengthRecord = std::make_shared<SubpathLengthRecord>(closed, subPath.getNumPoints());
+			auto subpathLengthRecord = std::make_shared<SubpathLengthRecord>(subPath.m_closed, );
 			pathResourceData->m_records.push_back(subpathLengthRecord);
 
 			for (auto pathPoint : subPath.m_points)
 			{
 				auto preceding = generate_psd_style_coords_from_canvas_coords(pathPoint.preceding);
 				auto anchor = generate_psd_style_coords_from_canvas_coords(pathPoint.anchor);
-				auto leaving = generate_psd_style_coords_from_canvas_coords(pathPoint.leaving);
-				auto bezierKnotRecord = std::make_shared<BezierKnotRecord>(closed, pathPoint.getLinked(), preceding, anchor, leaving);
-				pathResourceData->m_records.push_back(bezierKnotRecord);
+				auto leaving = generate_psd_style_coords_from_canvas_coords(pathPoint.preceding);
+				// convert from canvas coordinate integer to
+				// 24 fixed point float w/ 3 guard bits
+				// UV coords
 			}
 
 		}
-		return pathResourceData;
-	}
-	
-	// Essentially the reverse process of generate_vector_mask()
-	// WARNING: A bit "leetcodey"
-	std::shared_ptr<VectorMask> parseVectorMaskTaggedBlock(std::shared_ptr<PathResourceData> data)
-	{
 
-		// Convert the PathPoints of the vector mask from raw canvas coordiantes
-		// to the accepted format of the PSD spec
-		std::shared_ptr<PathResourceData> vectorMask;
-		
-		for (auto it = data->m_records.begin(); it != data->m_records.end(); it ++)
-		{
-			const auto record = it*;
-			int m_selector = record.getSelector();
-			if (i == 0 && auto* pathFill = dynamic_cast<PathFillRecord*>(record) ) {
-				continue;
-
-			} else {
-				throw std::runtime_error("The first path resource record wasn't a PathFill.. It should be!");
-			}
-			
-			if (auto* bezierKnotRecord = dynamic_cast<BezierKnotRecord>(record)) {
-				throw std::runtime_error("Found a BezierKnotRecord before we met a corresponding subpath length record!");
-			}
-
-			if (auto* subpathLengthRecord = dynamic_cast<SubpathLengthRecord*>(record)) {
-				SubPath subpath = parseSubpathLengthRecord(data, record, it);
-				vectorMask.push_back(subpath);
-			} 
-		}
-	}	
-
-	// Returns the parsed subpath length record and the last vector position it reached
-	SubPath parseSubpathLengthRecord(std::shared_ptr<PathResourceData> data
-			, std::shared_ptr<SubpathLengthRecord> subpathLengthRecord
-			, std::vector<IPathRecord>::iterator it)
-	{
-		bool closed = subPathLengthRecord->m_closed;
-		SubPath subPath(closed);
-
-		int numPoints = subpathLengthRecord->m_numPoints;
-		if (numPoints == 0)
-		{
-			// TODO: move all this validation stuff to the PathResourceData files when we read and/or construct!
-			throw std::runtime_error("SubPathLength record found to have 0 bezier knot records/points! It must have at least one of them");
-		}
-
-		int numPointsMet = 0;
-		
-		it ++;  // position of first bezier knot is right after the position of the subpath length record
-		while (numPointsMet < numPoints)
-		{
-			if (numPointsMet == numPoints) {
-				break;
-			}
-			if (it == data->m_records.end()) {
-				throw std::runtime_error("Tried to find more bezier knot records but no more records were found in the list of records in PathResourceData!");
-			}
-
-			const auto record = it*;
-			if (auto& bezierKnotRecord = dynamic_cast<BezierKnotRecord*>(record))
-			{
-				if (bezierKnotRecord->m_closed != closed) 
-				{
-					throw std::runtime_error("The 'closed' value of this bezier knot length record must match the closed value of its corresponding subpath length record!");
-				}
-					
-				PathPoint point = parseBezierKnot();
-				subPath.m_records.push_back(point);
-				// TODO: apatriawan validate the 'linked' property
-				// What happens if a record is linked but the preceidng and leaving are no collinear?
-				numPointsMet ++;
-			} 
-			else 
-			{
-				throw std::runtime_error("Expected a subpath length record!"); //TODO apatriawan (add the iteration number to these error statements)
-			}
-		}
-		
-		return std::pair<SubPath, int>{subPath, returnPosition};
 	}
 
-	PathPoint parseBezierKnot(std::shared_ptr<BezierKnotRecord> record)
-	{
-		// convert all coords
-	}
 
 	/// Optional argument which specifies in global coordinates where the top left of the layer is to e.g. flip or rotate a layer
 	/// currently this is only used for roundtripping, therefore optional. This value must be within the layers bounding box (or no

@@ -79,7 +79,9 @@ public:
 	/// 
 	/// Therefore not all channels are guaranteed to be the same. If `has_mask()` is true (or channel -2
 	/// if in the data) the mask channel may be any size and does not have to overlap with the layer.
-	/// 
+	/// TODO: apatriawan (so why is do we get an exception when the mask is a diff size?) 
+	/// maybe because it's not recognizing the mask and treating it as a regular channel?
+	/// oh wait, BUT the error only happens with we set the image data
 	/// The other channels do however have to be the same size
 	/// 
 	/// \return The evaluated image data including mask.
@@ -842,7 +844,8 @@ protected:
 				fmt::format("Invalid channel size encountered while calling set_channel(), expected <{}x{}> but instead got <{}x{}>",
 							width, height, channel.width(), channel.height()));
 		}
-
+		
+		// TODO: I don't think this should happen for vector masks apatriawan
 		if (id.id == Enum::ChannelID::UserSuppliedLayerMask)
 		{
 			this->impl_set_mask(std::move(channel), center_x, center_y);

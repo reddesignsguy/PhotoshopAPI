@@ -68,17 +68,20 @@ void PathResourceData::read(File& document, const uint8_t padding)
 	std::cout << "reading path resource" << std::endl;
 	uint16_t selector = ReadBinaryData<uint16_t>(document);
 	std::shared_ptr<IPathRecord> record;
-	if (selector == 6) // path fill rule record
+	// Enforce that path fill rule record is the 1st and only one exists
+	// Enforce the knot records go after subpath length records
+	// Enforce that # of knot records dont exceed values of subpath length records
+	if (selector == 6) // path fill rule record 
 	{
 		std::cout << "path fill beizer knot" << std::endl;
 		record = std::make_shared<PathFillRecord>();
 		skipBytes(document, 24);
 	}
-	else if (selector == 0 || selector == 3) //  subpath length record (open or closed)
+	else if (selector == 0 || selector == 3) //  subpath length record (closed or open)
 	{
 		std::cout << "subpath length record" << std::endl;
 		uint16_t length = ReadBinaryData<uint16_t>(document);
-		bool closed = selector == 0; 
+		bool closed = selector == 0; // open subpath length = 3 
 		record = std::make_shared<SubpathLengthRecord>(closed, length);
 		skipBytes(document, 22);
 	}

@@ -84,14 +84,14 @@ namespace _Impl
 		{
 			return std::make_shared<AdjustmentLayer<T>>();
 		}
-
-		if (CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecOriginData) ||
-			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecMaskSettings) ||
-			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeData) ||
-			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeContentData))
-		{
-			return std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
-		}
+// TODO Verify this is true because a few other layer types can still have these attributes
+//		if (CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecOriginData) ||
+//			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecMaskSettings) ||
+//			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeData) ||
+//			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeContentData))
+//		{
+//			return std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
+//		}
 #undef CHECK_TAGGED_BLOCK
 
 		return std::make_shared<ImageLayer<T>>(layerRecord, channelImageData, header);

@@ -73,13 +73,15 @@ struct BezierKnotRecord : IPathRecord
 	BezierKnotRecord(bool closed,
 			 bool linked,
 			 Point2D preceding, Point2D anchor, Point2D leaving)
-			 : m_closed(closed), m_linked(linked), m_preceding(preceding), m_anchor(anchor), m_leaving(leaving){};
+			 : m_closed(closed), m_linked(linked), m_preceding(preceding), m_anchor(anchor), m_leaving(leaving)
+	{};
 
 	bool m_closed;
 	bool m_linked;
 	Point2D m_preceding;
 	Point2D m_anchor;
 	Point2D m_leaving;
+	uint32_t // used for converting to PathPoint
 	void write(File& document) const override;
 };
 
@@ -118,9 +120,10 @@ struct InitialFillRecord : IPathRecord
 struct PathResourceData : public FileSection
 {
 	/// Initialize an empty section.
-	 PathResourceData() { // FileSection::size(4u); needed?
+	PathResourceData() { // FileSection::size(4u); needed?
 			     }; 
 	
+	// TODO: Privatize me and refactor
 	std::vector<std::shared_ptr<IPathRecord>> m_records;
 
 	/// Read a Photoshop UnicodeString struct storing both the UTF8 and UTF16LE
