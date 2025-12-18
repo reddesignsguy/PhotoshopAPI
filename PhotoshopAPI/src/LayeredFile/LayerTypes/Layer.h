@@ -79,8 +79,8 @@ struct Layer : public MaskMixin<T>
 	struct PathPoint {
 		PathPoint(Geometry::Point2D<int> preceding,
 			  Geometry::Point2D<int> anchor,
-			  Geometry::Point2D<int> leaving),
-			  bool linked	
+			  Geometry::Point2D<int> leaving,
+			  bool linked)	
 				: m_preceding(preceding),
 				  m_anchor(anchor),
 				  m_leaving(leaving),
@@ -396,7 +396,9 @@ struct Layer : public MaskMixin<T>
 			if (vector_mask_data)
 			{
 				std::cout << "apatriawan vector mask being read in layeredfile constructor" << std::endl;
-				m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
+				auto pathResourcePtr = vector_mask_data->m_pathResourcesData;
+				m_vectorMask = parseVectorMaskTaggedBlock(pathResourcePtr);
+			//	m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
 				m_vecMaskFlags = vector_mask_data->m_flag;
 				
 			}
@@ -641,6 +643,14 @@ protected:
 			}
 		}
 	}
+
+	Geometry::Point2D<int> convertCoordinatesFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords) {
+
+		int canvasX = psdCoords.x * imageWidth  / double(1 << 24);
+		int canvasY = psdCoords.y * imageHeight / double(1 << 24);
+
+		return Geometry::Point2D<uint32>(canvasX, canvasY);
+	}
 	
 	// TODO: Update me
 	// Generate coords in the expected PSD format which follows these stages: canvas coordinates -> normalized coordinates -> coordinates in 8.24 style
@@ -650,16 +660,15 @@ protected:
 	// signed, fixed point number with 8 bits before the binary point and 24 bits 
 	// after. Also, three guard bits exist. The range for each component is
 	// 0xF0000000 to 0x0FFFFFFF representing -16 to 16.
-	Geometry::Point2D<uint32_t> generate_psd_style_coords_from_canvas_coords(Geometry::Point2D<int> canvasCoords) {
+	Geometry::Point2D<uint32_t> convertCoordsFromCanvasToPsd(Geometry::Point2D<int> canvasCoords) {
 		// Convert from int to doubles so division doesn't F up
-		double relativeX = (double)canvasX / width();
-		double relativeY = (double)canvasY / height();
+		double relativeX = (double)canvasCoords.x / width();
+		double relativeY = (double)canvasCoords.y / height();
 
 		int32_t finalX = (int32_t)(relativeX * (1 << 24));
 		int32_t finalY = (int32_t)(relativeY * (1 << 24));
 
 		return Geometry::Point2D<uint32>(finalX, finalY);
-	
 	}
 
 	std::shared_ptr<PathResourceData> generate_vector_mask()
@@ -744,7 +753,8 @@ protected:
 		}
 
 		int numPointsMet = 0;
-		
+
+		// Go through all the bezier points	
 		it ++;  // position of first bezier knot is right after the position of the subpath length record
 		while (numPointsMet < numPoints)
 		{
@@ -768,6 +778,7 @@ protected:
 				// TODO: apatriawan validate the 'linked' property
 				// What happens if a record is linked but the preceidng and leaving are no collinear?
 				numPointsMet ++;
+				it++;
 			} 
 			else 
 			{
@@ -781,6 +792,12 @@ protected:
 	PathPoint parseBezierKnot(std::shared_ptr<BezierKnotRecord> record)
 	{
 		// convert all coords
+		auto preceding = convertFromPsdCoordsToCanvasCoords(record->m_preceding.x, record->m_preceding.y);
+
+		auto anchor = convertFromPsdCoordsToCanvasCoords(record->m_anchor.x, record->m_anchor.y);
+		auto leaving = convertFromPsdCoordsToCanvasCoords(record->m_leaving.x, record->m_leaving.y);
+		bool linked = record->m_linked;
+		return PathPoint(preceding, anchor, leaving, linked);
 	}
 
 	/// Optional argument which specifies in global coordinates where the top left of the layer is to e.g. flip or rotate a layer
