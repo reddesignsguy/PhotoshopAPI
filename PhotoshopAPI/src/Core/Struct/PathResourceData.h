@@ -81,7 +81,6 @@ struct BezierKnotRecord : IPathRecord
 	Point2D m_preceding;
 	Point2D m_anchor;
 	Point2D m_leaving;
-	uint32_t // used for converting to PathPoint
 	void write(File& document) const override;
 };
 

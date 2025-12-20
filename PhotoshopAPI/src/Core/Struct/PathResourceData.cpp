@@ -79,7 +79,7 @@ void PathResourceData::read(File& document, const uint8_t padding)
 	}
 	else if (selector == 0 || selector == 3) //  subpath length record (closed or open)
 	{
-		std::cout << "subpath length record" << std::endl;
+		std::cout << "subpath length record w/ selector: " << selector << std::endl;
 		uint16_t length = ReadBinaryData<uint16_t>(document);
 		bool closed = selector == 0; // open subpath length = 3 
 		record = std::make_shared<SubpathLengthRecord>(closed, length);

@@ -116,11 +116,12 @@ struct Layer : public MaskMixin<T>
 
 	struct VectorMask 
 	{
-		VectorMask(std::vector<SubPath> subPaths) : m_subPaths(subPaths){};
+		VectorMask(std::vector<SubPath> subPaths, std::unique_ptr<bool> startWithAllPixels) : m_subPaths(subPaths), m_startWithAllPixels(std::move(startWithAllPixels)) {};
 		std::vector<SubPath> m_subPaths; // privatize me
+		std::unique_ptr<bool> m_startWithAllPixels = nullptr;
 	};
 
-	std::shared_ptr<VectorMask> m_vectorMask = nullptr;
+	std::unique_ptr<VectorMask> m_vectorMask = nullptr;
 
 	/// The layers' name. Stored as a utf-8 string
 	const std::string& name() const noexcept { return m_LayerName; }
@@ -396,8 +397,8 @@ struct Layer : public MaskMixin<T>
 			if (vector_mask_data)
 			{
 				std::cout << "apatriawan vector mask being read in layeredfile constructor" << std::endl;
-				auto pathResourcePtr = vector_mask_data->m_pathResourcesData;
-				m_vectorMask = parseVectorMaskTaggedBlock(pathResourcePtr);
+				auto pathResourcePtr = std::move(vector_mask_data->m_pathResourceData);
+				m_vectorMask = parseVectorMaskTaggedBlock(std::move(pathResourcePtr));
 			//	m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
 				m_vecMaskFlags = vector_mask_data->m_flag;
 				
@@ -566,7 +567,9 @@ protected:
 		{
 			// TODO: generate the path ptr
 			auto pathResourcesPtr = generate_vector_mask();	
-			blockVec.push_back(pathResourcesPtr);
+			auto vecMaskPtr = std::make_shared<VectorMaskTaggedBlock>(std::move(pathResourcesPtr), m_vecMaskFlags);
+	//		auto vecMaskDataPtr = std::make_shared<VectorMaskTaggedBlock>(std::move(m_pathResourcesPtr),
+			blockVec.push_back(vecMaskPtr);
 
 		}	
 	//	if (m_pathResourcesPtr != nullptr)
@@ -644,16 +647,19 @@ protected:
 		}
 	}
 
-	Geometry::Point2D<int> convertCoordinatesFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords) {
+	Geometry::Point2D<int> convertCoordsFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords) {
+		// TODO: Remove me
+		//double tmpX = ((preceding.x << 3) >> 3) / (double(1 << 24));
+		//double tmpY = ((preceding.y << 3) >> 3) / (double(1 << 24));
 
-		int canvasX = psdCoords.x * imageWidth  / double(1 << 24);
-		int canvasY = psdCoords.y * imageHeight / double(1 << 24);
+		int canvasX = ((psdCoords.x << 3) >> 3)  / double(1 << 24) * width();
+	       	int canvasY = ((psdCoords.y << 3) >> 3)  / double(1 << 24) * height();
 
-		return Geometry::Point2D<uint32>(canvasX, canvasY);
+		return Geometry::Point2D<int>(canvasX, canvasY);
+		return Geometry::Point2D<int>(canvasX, canvasY); 
 	}
-	
+       
 	// TODO: Update me
-	// Generate coords in the expected PSD format which follows these stages: canvas coordinates -> normalized coordinates -> coordinates in 8.24 style
 	// Eg) Canvas coords of x=25,y=75 in a 100x100 spaced document would be 
 	// x=0.25,y=0.75 in normalized space.. then photoshop stores numbers based on the following spec:
 	// * Photoshop stores these coordiantes as a pair of 32-bit components where eac h component is a 
@@ -661,6 +667,7 @@ protected:
 	// after. Also, three guard bits exist. The range for each component is
 	// 0xF0000000 to 0x0FFFFFFF representing -16 to 16.
 	Geometry::Point2D<uint32_t> convertCoordsFromCanvasToPsd(Geometry::Point2D<int> canvasCoords) {
+
 		// Convert from int to doubles so division doesn't F up
 		double relativeX = (double)canvasCoords.x / width();
 		double relativeY = (double)canvasCoords.y / height();
@@ -668,14 +675,14 @@ protected:
 		int32_t finalX = (int32_t)(relativeX * (1 << 24));
 		int32_t finalY = (int32_t)(relativeY * (1 << 24));
 
-		return Geometry::Point2D<uint32>(finalX, finalY);
+		return Geometry::Point2D<uint32_t>(finalX, finalY);
 	}
 
-	std::shared_ptr<PathResourceData> generate_vector_mask()
+	std::unique_ptr<PathResourceData> generate_vector_mask()
 	{
 		// Convert the PathPoints of the vector mask from raw canvas coordiantes
 		// to the accepted format of the PSD spec
-		std::unique_ptr<PathResourceData> pathResourceData;
+		auto pathResourceData = std::make_unique<PathResourceData>();
 
 		// add path fill
 
@@ -686,6 +693,13 @@ protected:
 		auto pathFillRecord = std::make_shared<PathFillRecord>();
 		pathResourceData->m_records.push_back(pathFillRecord);
 
+		if (m_vectorMask->m_startWithAllPixels)
+		{
+			bool startWithAllPixels = *(m_vectorMask->m_startWithAllPixels);
+			auto initialFillRecord = std::make_shared<InitialFillRecord>(startWithAllPixels);
+			pathResourceData->m_records.push_back(initialFillRecord);
+		}
+
 		// add points
 		for (auto subPath : m_vectorMask->m_subPaths)
 		{
@@ -695,9 +709,9 @@ protected:
 
 			for (auto pathPoint : subPath.m_points)
 			{
-				auto preceding = generate_psd_style_coords_from_canvas_coords(pathPoint.preceding);
-				auto anchor = generate_psd_style_coords_from_canvas_coords(pathPoint.anchor);
-				auto leaving = generate_psd_style_coords_from_canvas_coords(pathPoint.leaving);
+				auto preceding = convertCoordsFromCanvasToPsd(pathPoint.m_preceding);
+				auto anchor = convertCoordsFromCanvasToPsd(pathPoint.m_anchor);
+				auto leaving = convertCoordsFromCanvasToPsd(pathPoint.m_leaving);
 				auto bezierKnotRecord = std::make_shared<BezierKnotRecord>(closed, pathPoint.getLinked(), preceding, anchor, leaving);
 				pathResourceData->m_records.push_back(bezierKnotRecord);
 			}
@@ -708,41 +722,66 @@ protected:
 	
 	// Essentially the reverse process of generate_vector_mask()
 	// WARNING: A bit "leetcodey"
-	std::shared_ptr<VectorMask> parseVectorMaskTaggedBlock(std::shared_ptr<PathResourceData> data)
+	std::unique_ptr<VectorMask> parseVectorMaskTaggedBlock(std::shared_ptr<PathResourceData> data)
 	{
-
+		std::cout << "parsing vector mask tagged block" << std::endl;
 		// Convert the PathPoints of the vector mask from raw canvas coordiantes
 		// to the accepted format of the PSD spec
-		std::shared_ptr<PathResourceData> vectorMask;
-		
-		for (auto it = data->m_records.begin(); it != data->m_records.end(); it ++)
-		{
-			const auto record = it*;
-			int m_selector = record.getSelector();
-			if (i == 0 && auto* pathFill = dynamic_cast<PathFillRecord*>(record) ) {
-				continue;
+		std::vector<SubPath> subpaths;
+		std::unique_ptr<bool> startWithAllPixels = nullptr;
 
-			} else {
-				throw std::runtime_error("The first path resource record wasn't a PathFill.. It should be!");
+		bool checkedFirstRecord = false;
+		auto it = data->m_records.begin();
+		while (it != data->m_records.end())
+		{
+			const auto& record = *it;
+			if (record == nullptr)
+			{
+				throw std::runtime_error("found a null path resource record!");
 			}
-			
-			if (auto* bezierKnotRecord = dynamic_cast<BezierKnotRecord>(record)) {
+			if (!checkedFirstRecord)
+			{
+				if (auto pathFill = std::dynamic_pointer_cast<PathFillRecord>(record)) {
+
+					it++;
+					checkedFirstRecord = true;
+					continue;
+				} else {
+					throw std::runtime_error("The first path resource record wasn't a PathFill.. It should be!");
+				}
+
+			}
+
+			if (auto initialFillRecord = std::dynamic_pointer_cast<InitialFillRecord>(record)) {
+				startWithAllPixels = std::make_unique<bool>(initialFillRecord->m_startWithAllPixels);
+				it++;
+				continue;
+			}
+
+			// we should never be able to see bezier knot records in this function because parseSubpathLengthRecord takes care of them
+			if (auto bezierKnotRecord = std::dynamic_pointer_cast<BezierKnotRecord>(record)) {
 				throw std::runtime_error("Found a BezierKnotRecord before we met a corresponding subpath length record!");
 			}
 
-			if (auto* subpathLengthRecord = dynamic_cast<SubpathLengthRecord*>(record)) {
-				SubPath subpath = parseSubpathLengthRecord(data, record, it);
-				vectorMask.push_back(subpath);
-			} 
+			if (auto subpathLengthRecord = std::dynamic_pointer_cast<SubpathLengthRecord>(record)) {
+				SubPath subpath = parseSubpathLengthRecord(data, subpathLengthRecord, it);
+				subpaths.push_back(subpath);
+				// no need to advance "it" here because parseSubpathLengthRecord() does it for us
+			}
+			else {
+
+				it++;
+			}
 		}
+		return std::make_unique<VectorMask>(subpaths, std::move(startWithAllPixels));
 	}	
 
 	// Returns the parsed subpath length record and the last vector position it reached
-	SubPath parseSubpathLengthRecord(std::shared_ptr<PathResourceData> data
-			, std::shared_ptr<SubpathLengthRecord> subpathLengthRecord
-			, std::vector<IPathRecord>::iterator it)
+	SubPath parseSubpathLengthRecord(const std::shared_ptr<PathResourceData> data
+			, const std::shared_ptr<SubpathLengthRecord> subpathLengthRecord
+			, std::vector<std::shared_ptr<IPathRecord>>::iterator& it)
 	{
-		bool closed = subPathLengthRecord->m_closed;
+		bool closed = subpathLengthRecord->m_closed;
 		SubPath subPath(closed);
 
 		int numPoints = subpathLengthRecord->m_numPoints;
@@ -765,16 +804,18 @@ protected:
 				throw std::runtime_error("Tried to find more bezier knot records but no more records were found in the list of records in PathResourceData!");
 			}
 
-			const auto record = it*;
-			if (auto& bezierKnotRecord = dynamic_cast<BezierKnotRecord*>(record))
+			const auto& record = *it;
+			if (auto bezierKnotRecord = std::dynamic_pointer_cast<BezierKnotRecord>(record))
 			{
-				if (bezierKnotRecord->m_closed != closed) 
+				bool recordClosed = bezierKnotRecord->m_closed;
+				if (recordClosed != closed) 
 				{
-					throw std::runtime_error("The 'closed' value of this bezier knot length record must match the closed value of its corresponding subpath length record!");
+					// TODO: this doesn't seem to be enforced in photoshop..
+					// throw std::runtime_error("The 'closed' value of this bezier knot length record must match the closed value of its corresponding subpath length record!");
 				}
 					
-				PathPoint point = parseBezierKnot();
-				subPath.m_records.push_back(point);
+				PathPoint point = parseBezierKnot(bezierKnotRecord);
+				subPath.m_points.push_back(point);
 				// TODO: apatriawan validate the 'linked' property
 				// What happens if a record is linked but the preceidng and leaving are no collinear?
 				numPointsMet ++;
@@ -782,20 +823,21 @@ protected:
 			} 
 			else 
 			{
-				throw std::runtime_error("Expected a subpath length record!"); //TODO apatriawan (add the iteration number to these error statements)
+				throw std::runtime_error("Expected a bezier knot  record!"); //TODO apatriawan (add the iteration number to these error statements)
 			}
 		}
 		
-		return std::pair<SubPath, int>{subPath, returnPosition};
+		return subPath;
 	}
 
 	PathPoint parseBezierKnot(std::shared_ptr<BezierKnotRecord> record)
 	{
+		auto coord = Geometry::Point2D<uint32_t>(record->m_preceding.x,
+							 record->m_preceding.y);
 		// convert all coords
-		auto preceding = convertFromPsdCoordsToCanvasCoords(record->m_preceding.x, record->m_preceding.y);
-
-		auto anchor = convertFromPsdCoordsToCanvasCoords(record->m_anchor.x, record->m_anchor.y);
-		auto leaving = convertFromPsdCoordsToCanvasCoords(record->m_leaving.x, record->m_leaving.y);
+		auto preceding = convertCoordsFromPsdToCanvas(coord);
+		auto anchor = convertCoordsFromPsdToCanvas(coord);
+		auto leaving = convertCoordsFromPsdToCanvas(coord);
 		bool linked = record->m_linked;
 		return PathPoint(preceding, anchor, leaving, linked);
 	}
