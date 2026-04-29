@@ -912,6 +912,8 @@ namespace Enum
 			return std::optional<TaggedBlockKey>(it->second);
 		}
 		else {
+			std::cout << "apatriawan: unknown tagged block found! lol" << std::endl;
+			std::cout << "apatriawan: ... the tagged block is: "<< key << std::endl;
 			return std::optional<TaggedBlockKey>(TaggedBlockKey::Unknown);
 		}
 	}
@@ -920,7 +922,7 @@ namespace Enum
 	template <>
 	inline std::optional<std::vector<std::string>> getTaggedBlockKey(TaggedBlockKey key)
 	{
-		std::cout << "getting tagged block key "<< std::endl;
+		std::cout << "getting tagged block key" <<  std::endl;
 		return findMultipleByValue(taggedBlockMap, key);
 	}
 

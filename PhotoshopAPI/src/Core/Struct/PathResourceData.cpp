@@ -137,6 +137,7 @@ void PathResourceData::read(File& document, const uint8_t padding)
 	{
 		std::cout << "initial fill record" << std::endl;
 		bool startWithAllPixels = ReadBinaryData<uint16_t>(document) == 1;
+		startWithAllPixels = 0; // TODO: Unpatch me: https://github.com/reddesignsguy/PhotoshopAPI/issues/4
 		record = std::make_shared<InitialFillRecord>(startWithAllPixels);
 		skipBytes(document, 22);
 	}

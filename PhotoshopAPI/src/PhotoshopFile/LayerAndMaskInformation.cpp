@@ -523,6 +523,7 @@ void LayerRecord::read(File& document, const FileHeader& header, ProgressCallbac
 
 
 	m_ChannelCount = ReadBinaryData<uint16_t>(document);
+	std::cout << "channel count: " << unsigned(m_ChannelCount) << std::endl;
 	if (m_ChannelCount > 56)
 	{
 		PSAPI_LOG_ERROR("LayerRecord", "A Photoshop document cannot have more than 56 channels at once");
@@ -536,6 +537,9 @@ void LayerRecord::read(File& document, const FileHeader& header, ProgressCallbac
 		channelInfo.m_ChannelID = Enum::toChannelIDInfo(index, header.m_ColorMode);
 		std::variant<uint32_t, uint64_t> size = ReadBinaryDataVariadic<uint32_t, uint64_t>(document, header.m_Version);
 		channelInfo.m_Size = ExtractWidestValue<uint32_t, uint64_t>(size);
+		std::cout << "... on channel: " << i << std::endl;
+		std::cout << "...... channel type: " << unsigned(index) << std::endl;
+		std::cout << "...... channel size: " << unsigned(channelInfo.m_Size) << std::endl;
 
 		// Size of one channel information section is 6 or 10 bytes
 		FileSection::size(FileSection::size() + static_cast<uint64_t>(2u) + SwapPsdPsb<uint32_t, uint64_t>(header.m_Version));
@@ -831,23 +835,25 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		// We have vector masks.. which are treated differently
 		// Pretty sure vector masks go through this block.. but do it again; Verify that vector mask PSD goes through this block but the one w/o the vector mask doesn't
 		// Yes I'm correct, if i don't have a vmsk, then this doesn't execute
-	if (layerRecord.m_LayerMaskData.has_value())
-	{
-		if (layerRecord.m_LayerMaskData.value().m_LayerMask.has_value())
-		{
-			const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
-			// Generate our coordinates from the mask extents instead
-			ChannelCoordinates lrMask = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
-			if (static_cast<uint32_t>(lrMask.width) > maxWidth)
-			{
-				maxWidth = static_cast<uint32_t>(lrMask.width);
-			}
-			if (static_cast<uint32_t>(lrMask.height) > maxHeight)
-			{
-				maxHeight = static_cast<uint32_t>(lrMask.height);
-			}
-		}
-	}
+	std::cout << "width and height for big buffer.. width: "<< maxWidth << ", height: " << maxHeight << std::endl;
+//	if (layerRecord.m_LayerMaskData.has_value())
+//	{
+//		if (layerRecord.m_LayerMaskData.value().m_LayerMask.has_value())
+//		{
+//			const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
+//			// Generate our coordinates from the mask extents instead
+//			ChannelCoordinates lrMask = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
+//			if (static_cast<uint32_t>(lrMask.width) > maxWidth)
+//			{
+//				maxWidth = static_cast<uint32_t>(lrMask.width);
+//			}
+//			if (static_cast<uint32_t>(lrMask.height) > maxHeight)
+//			{
+//				maxHeight = static_cast<uint32_t>(lrMask.height);
+//			}
+//			std::cout << "FOUND MASK EXTENTS.. width and height for big buffer is now.. width: "<< maxWidth << ", height: " << maxHeight << std::endl;
+//		}
+//	}
 	std::vector<uint8_t> buffer;
 	if (header.m_Depth == Enum::BitDepth::BD_8)
 	{
@@ -871,6 +877,7 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 	// uses the 'buffer' as an intermediate memory area
 	for (const auto& channel : layerRecord.m_ChannelInformation)
 	{
+		// continue; // TODO: remove this albany!
 		const size_t index = &channel - &layerRecord.m_ChannelInformation[0];
 		const uint64_t channelOffset = channelOffsets[index];
 
@@ -878,31 +885,33 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		ChannelCoordinates coordinates = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
 
 		// If the channel is a mask the extents are actually stored in the layermaskdata
-		if (channel.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask || channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask)
-		{
-			//TODO (apatriawan) this only takes in a layer mask
-			// for some reason, this gets called when i'm sure that we don't have a layer mask enabled
-			// apatriawan NICE! this seems to work!
+	//	if (channel.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask || channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask)
+	//	{
+	//		//TODO (apatriawan) this only takes in a layer mask
+	//		// for some reason, this gets called when i'm sure that we don't have a layer mask enabled
+	//		// apatriawan NICE! this seems to work!
 
-			// apatriawan UPDATE: Seems like this really should just be reading the pixel mask.. the vec mask shouldn't be part of this as there's no channel data to read from?
-			// therefore, we should break out if this is actually a vec mask?
-			// the question is, why does m_LayerMaskData have a value when we don't have a pixel mask?
-			// We know it has garbo values.. where/when do the garbo values get loaded in if at all?
-			// TODO: apatriawan For now, simply use the vector mask to get the extents. must update this for contributing to emil's psd tools project
-	//		if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_LayerMask.has_value())
-			if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_VectorMask.has_value())
-			{
-				const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_VectorMask.value();
+	//		// apatriawan UPDATE: Seems like this really should just be reading the pixel mask.. the vec mask shouldn't be part of this as there's no channel data to read from?
+	//		// therefore, we should break out if this is actually a vec mask?
+	//		// the question is, why does m_LayerMaskData have a value when we don't have a pixel mask?
+	//		// We know it has garbo values.. where/when do the garbo values get loaded in if at all?
+	//		// TODO: apatriawan For now, simply use the vector mask to get the extents. must update this for contributing to emil's psd tools project
+	////		if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_LayerMask.has_value())
+	//		if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_VectorMask.has_value())
+	//		{
+	//			const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_VectorMask.value();
 
-		//		 const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
-				// Generate our coordinates from the mask extents instead
-				coordinates = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
-				std::cout << "top: " << mask.m_Top << ", left: " <<  mask.m_Left <<", bottom: " << mask.m_Bottom << ", right: "<< mask.m_Right << std::endl; 
-				// apatriawan getting weird values of:
-				//  top: 0, left: 0, bottom: -16777216, right: 0
-				//  might be garbo values? 
-			}
-		}
+	//	//		 const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
+	//			// Generate our coordinates from the mask extents instead
+	//			coordinates = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
+	//			std::cout << "readjusting coordinates: top: " << mask.m_Top << ", left: " <<  mask.m_Left <<", bottom: " << mask.m_Bottom << ", right: "<< mask.m_Right << std::endl; 
+	//			// apatriawan getting weird values of:
+	//			//  top: 0, left: 0, bottom: -16777216, right: 0
+	//			//  might be garbo values? 
+	//		}
+	//	}
+		
+
 		// Get the compression of the channel. We must read it this way as the offset has to be correct before parsing
 		Enum::Compression channelCompression = Enum::Compression::ZipPrediction;
 		{
@@ -914,9 +923,10 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		}
 		m_ChannelCompression[index] = channelCompression;
 		FileSection::size(FileSection::size() + channel.m_Size);
-
+		std::cout << "channel.m_Size: " << unsigned(channel.m_Size) << std::endl;
 		if (header.m_Depth == Enum::BitDepth::BD_8)
 		{ // TODO: (apatriawan) the buffer size is dependent on the extents, which vector mask supposdely has
+		  	std::cout << "buffer span size based on width: "<< coordinates.width << ", height: " << coordinates.height << std::endl;
 			std::span<uint8_t> bufferSpan(buffer.data(), coordinates.width * coordinates.height);
 			DecompressData<uint8_t>(stream, bufferSpan, channelOffset + 2u, channelCompression, header, coordinates.width, coordinates.height, channel.m_Size - 2u);
 			auto channelPtr = std::make_unique<channel_wrapper>(

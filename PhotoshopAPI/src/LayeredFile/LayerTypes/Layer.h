@@ -328,7 +328,9 @@ struct Layer : public MaskMixin<T>
 				}
 				else
 				{
-					PSAPI_LOG_ERROR("Layer", "Unable to extract mask channel for layer '%s'", m_LayerName.c_str());
+					// TODO: Albany: I'm setting this to a WARN because this isn't a problem for VECTOR masks!
+					// They dont raelly have channel data!
+					PSAPI_LOG_WARNING("Layer", "Unable to extract mask channel for layer '%s'", m_LayerName.c_str());
 				}
 
 				// If no mask parameters are present we just use sensible defaults and skip

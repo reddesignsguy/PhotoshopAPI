@@ -44,7 +44,8 @@ namespace RLE_Impl
     {
         PSAPI_PROFILE_FUNCTION();
         std::vector<uint8_t> decompressedData(sizeof(T) * static_cast<uint64_t>(width) * static_cast<uint64_t>(height), 0u);
-
+	std::cout << "width: "  << width<< std::endl;
+	std::cout << "height: "  << height << std::endl;
         uint64_t i = 0;
         uint64_t idx = 0;   // Index into decompressedData
         const auto dataSize = compressedData.size();
@@ -96,7 +97,7 @@ namespace RLE_Impl
         uint64_t i = 0;
         uint64_t idx = 0;   // Index into decompressedData
         const auto dataSize = compressedData.size();
-
+	
         while (i < dataSize) {
             const uint8_t value = compressedData[i];
 
@@ -117,9 +118,15 @@ namespace RLE_Impl
             }
             else
             {
+		std::cout << "decompressedData size: "<< decompressedData.size() << std::endl;
+		std::cout << "compressedData size: "<< compressedData.size() << std::endl;
+		std::cout << "value: " << unsigned(value) << std::endl;
+		std::cout << "i: " << unsigned(i) << std::endl;
                 // Header byte indicates the next n bytes are to be read as values
                 for (int j = 0; j <= value; ++j)
                 {
+			std::cout << "j: " << j << std::endl;
+			std::cout << "idx: "<< unsigned(idx)<< std::endl;
                     decompressedData[idx] = compressedData[i + j + 1];
                     ++idx;
                 }

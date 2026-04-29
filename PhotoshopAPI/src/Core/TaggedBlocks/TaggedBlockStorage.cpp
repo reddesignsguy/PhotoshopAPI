@@ -213,11 +213,12 @@ const std::shared_ptr<TaggedBlock> TaggedBlockStorage::readTaggedBlock(File& doc
 			auto vecMaskTaggedBlock = std::make_shared<VectorMaskTaggedBlock>();
 			vecMaskTaggedBlock->read(document, header, offset, taggedBlock.value(), signature, padding);
 			this->m_TaggedBlocks.push_back(vecMaskTaggedBlock);
-			return vecMaskTaggedBlock;
 			std::cout << "apatriawan pushing vec mask tagged block!" << std::endl;
+			return vecMaskTaggedBlock;
 		}
 		else
 		{
+			std::cout << "apatriawan made base tagged block! for: " <<  keyStr.c_str() << std::endl;
 			auto baseTaggedBlock = std::make_shared<TaggedBlock>();
 			baseTaggedBlock->read(document, header, offset, signature, taggedBlock.value(), padding);
 			this->m_TaggedBlocks.push_back(baseTaggedBlock);
@@ -226,6 +227,7 @@ const std::shared_ptr<TaggedBlock> TaggedBlockStorage::readTaggedBlock(File& doc
 	}
 	else
 	{
+		std::cout << "apatriawan: could not find taged block from key!: " <<  keyStr.c_str() << std::endl;
 		PSAPI_LOG_ERROR("TaggedBlock", "Could not find tagged block from key '%s'", keyStr.c_str());
 		return nullptr;
 	}
