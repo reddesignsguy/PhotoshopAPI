@@ -1,0 +1,2 @@
+add_executable(AddVectorMasks main.cpp)
+target_link_libraries(AddVectorMasks PRIVATE PhotoshopAPI)

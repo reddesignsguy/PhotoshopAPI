@@ -116,9 +116,10 @@ struct Layer : public MaskMixin<T>
 
 	struct VectorMask 
 	{
-		VectorMask(std::vector<SubPath> subPaths, std::unique_ptr<bool> startWithAllPixels) : m_subPaths(subPaths), m_startWithAllPixels(std::move(startWithAllPixels)) {};
+		VectorMask(std::vector<SubPath> subPaths, bool startWithAllPixels) : m_subPaths(subPaths), m_startWithAllPixels(startWithAllPixels) {};
+		VectorMask(std::vector<SubPath> subPaths) : m_subPaths(subPaths) {};
 		std::vector<SubPath> m_subPaths; // privatize me
-		std::unique_ptr<bool> m_startWithAllPixels = nullptr;
+		std::optional<bool> m_startWithAllPixels;
 	};
 
 	std::unique_ptr<VectorMask> m_vectorMask = nullptr;
@@ -240,9 +241,9 @@ struct Layer : public MaskMixin<T>
 	}
 
 	//// Creates a vector mask path
- 	virtual void set_vector_mask(std::vector<PathPoint> points, bool closed)
+ 	virtual void set_vector_mask(VectorMask vectorMask)
 	{
-
+		m_vectorMask = std::make_unique<VectorMask>(vectorMask);
 	}
 
 	Layer() : m_LayerName(""), m_BlendMode(Enum::BlendMode::Normal), m_IsVisible(true), m_Opacity(255), m_Width(0u), m_Height(0u), m_CenterX(0u), m_CenterY(0u) {};
@@ -693,9 +694,9 @@ protected:
 		auto pathFillRecord = std::make_shared<PathFillRecord>();
 		pathResourceData->m_records.push_back(pathFillRecord);
 
-		if (m_vectorMask->m_startWithAllPixels)
+		if (m_vectorMask->m_startWithAllPixels.has_value())
 		{
-			bool startWithAllPixels = *(m_vectorMask->m_startWithAllPixels);
+			bool startWithAllPixels = m_vectorMask->m_startWithAllPixels.value();
 			auto initialFillRecord = std::make_shared<InitialFillRecord>(startWithAllPixels);
 			pathResourceData->m_records.push_back(initialFillRecord);
 		}
@@ -728,7 +729,7 @@ protected:
 		// Convert the PathPoints of the vector mask from raw canvas coordiantes
 		// to the accepted format of the PSD spec
 		std::vector<SubPath> subpaths;
-		std::unique_ptr<bool> startWithAllPixels = nullptr;
+		std::optional<bool> startWithAllPixels;
 
 		bool checkedFirstRecord = false;
 		auto it = data->m_records.begin();
@@ -753,7 +754,7 @@ protected:
 			}
 
 			if (auto initialFillRecord = std::dynamic_pointer_cast<InitialFillRecord>(record)) {
-				startWithAllPixels = std::make_unique<bool>(initialFillRecord->m_startWithAllPixels);
+				startWithAllPixels = initialFillRecord->m_startWithAllPixels;
 				it++;
 				continue;
 			}
@@ -773,7 +774,11 @@ protected:
 				it++;
 			}
 		}
-		return std::make_unique<VectorMask>(subpaths, std::move(startWithAllPixels));
+
+		if (startWithAllPixels) {
+			return std::make_unique<VectorMask>(subpaths, startWithAllPixels.value());
+		}
+		return std::make_unique<VectorMask>(subpaths);
 	}	
 
 	// Returns the parsed subpath length record and the last vector position it reached
