@@ -135,8 +135,11 @@ void PathResourceData::read(File& document, const uint8_t padding)
 	}
 	else if (selector == 8) // initial fill rule record
 	{
-		std::cout << "initial fill record" << std::endl;
 		bool startWithAllPixels = ReadBinaryData<uint16_t>(document) == 1;
+		// TODO: Figure out why startWithAllPixels seems to sometimes be the wrong value
+		// We must hardcode this = false otherwise the mask will be inverted
+		startWithAllPixels = false;
+		std::cout << "initial fill record. startWithAllPixels:  "<< startWithAllPixels << std::endl;
 		record = std::make_shared<InitialFillRecord>(startWithAllPixels);
 		skipBytes(document, 22);
 	}
