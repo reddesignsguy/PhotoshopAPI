@@ -116,7 +116,7 @@ struct Layer : public MaskMixin<T>
 
 	struct VectorMask 
 	{
-		VectorMask();
+		VectorMask(){};
 		VectorMask(std::vector<SubPath> subPaths, bool startWithAllPixels) : m_subPaths(subPaths), m_startWithAllPixels(startWithAllPixels) {};
 		VectorMask(std::vector<SubPath> subPaths) : m_subPaths(subPaths) {};
 		std::vector<SubPath> m_subPaths; // privatize me
