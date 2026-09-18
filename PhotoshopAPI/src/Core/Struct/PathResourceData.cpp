@@ -134,6 +134,7 @@ void PathResourceData::read(File& document, const uint8_t padding)
 	{
 		std::cout << "initial fill record" << std::endl;
 		bool startWithAllPixels = ReadBinaryData<uint16_t>(document) == 1;
+		startWithAllPixels = true;
 		record = std::make_shared<InitialFillRecord>(startWithAllPixels);
 		skipBytes(document, 22);
 	}
