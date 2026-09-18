@@ -85,13 +85,13 @@ namespace _Impl
 			return std::make_shared<AdjustmentLayer<T>>();
 		}
 
-		if (CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecOriginData) ||
-			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecMaskSettings) ||
-			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeData) ||
-			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeContentData))
-		{
-			return std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
-		}
+	//	if (CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecOriginData) ||
+	//		CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecMaskSettings) ||
+	//		CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeData) ||
+	//		CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeContentData))
+	//	{
+	//		return std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
+	//	}
 #undef CHECK_TAGGED_BLOCK
 
 		return std::make_shared<ImageLayer<T>>(layerRecord, channelImageData, header);
