@@ -838,12 +838,18 @@ protected:
 
 	PathPoint parseBezierKnot(std::shared_ptr<BezierKnotRecord> record)
 	{
-		auto coord = Geometry::Point2D<uint32_t>(record->m_preceding.x,
+		auto pre_point = Geometry::Point2D<uint32_t>(record->m_preceding.x,
 							 record->m_preceding.y);
+
+		auto anc_point = Geometry::Point2D<uint32_t>(record->m_anchor.x,
+							 record->m_anchor.y);
+
+		auto leav_point = Geometry::Point2D<uint32_t>(record->m_leaving.x,
+							 record->m_leaving.y);
 		// convert all coords
-		auto preceding = convertCoordsFromPsdToCanvas(coord);
-		auto anchor = convertCoordsFromPsdToCanvas(coord);
-		auto leaving = convertCoordsFromPsdToCanvas(coord);
+		auto preceding = convertCoordsFromPsdToCanvas(pre_point);
+		auto anchor = convertCoordsFromPsdToCanvas(anc_point);
+		auto leaving = convertCoordsFromPsdToCanvas(leav_point);
 		bool linked = record->m_linked;
 		return PathPoint(preceding, anchor, leaving, linked);
 	}
