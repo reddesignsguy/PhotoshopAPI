@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <execution>
 #include <limits>
+#include <exception>
 
 #define __STDC_FORMAT_MACROS 1
 #include <inttypes.h>
@@ -822,45 +823,10 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		countingOffset += channel.m_Size;
 	}
 
-	// Allocate a binary vector for the maximum extents such that we can then reuse the buffer in the loops rather than reallocating memory
-	ChannelCoordinates extent = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
-	uint32_t maxWidth = extent.width;
-	uint32_t maxHeight = extent.height;
-		// TODO: Must update m_layerMaskInfo as mask data is treated as a channel
-		// When I remove the vector mask, the bin executes perfectly
-		// We have vector masks.. which are treated differently
-		// Pretty sure vector masks go through this block.. but do it again; Verify that vector mask PSD goes through this block but the one w/o the vector mask doesn't
-		// Yes I'm correct, if i don't have a vmsk, then this doesn't execute
-	if (layerRecord.m_LayerMaskData.has_value())
-	{
-		if (layerRecord.m_LayerMaskData.value().m_LayerMask.has_value())
-		{
-			const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
-			// Generate our coordinates from the mask extents instead
-			ChannelCoordinates lrMask = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
-			if (static_cast<uint32_t>(lrMask.width) > maxWidth)
-			{
-				maxWidth = static_cast<uint32_t>(lrMask.width);
-			}
-			if (static_cast<uint32_t>(lrMask.height) > maxHeight)
-			{
-				maxHeight = static_cast<uint32_t>(lrMask.height);
-			}
-		}
-	}
+	// Reuse storage across channels, but size it only after selecting that
+	// channel's bounds. Mask channels can be larger than (or exist without)
+	// the layer's pixel data.
 	std::vector<uint8_t> buffer;
-	if (header.m_Depth == Enum::BitDepth::BD_8)
-	{
-		buffer = std::vector<uint8_t>(maxWidth * maxHeight * sizeof(uint8_t));
-	}
-	else if (header.m_Depth == Enum::BitDepth::BD_16)
-	{
-		buffer = std::vector<uint8_t>(maxWidth * maxHeight * sizeof(uint16_t));
-	}
-	else if (header.m_Depth == Enum::BitDepth::BD_32)
-	{
-		buffer = std::vector<uint8_t>(maxWidth * maxHeight * sizeof(float32_t));
-	}
 
 
 	// Preallocate the ImageData vector as we need valid indices for the for each loop
@@ -877,32 +843,33 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		// Generate our coordinates from the layer extents
 		ChannelCoordinates coordinates = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
 
-		// If the channel is a mask the extents are actually stored in the layermaskdata
-		if (channel.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask || channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask)
+		// Channel -2 uses the first mask rectangle (the rasterized vector
+		// mask when present); channel -3 uses the separate real pixel mask.
+		if (layerRecord.m_LayerMaskData)
 		{
-			//TODO (apatriawan) this only takes in a layer mask
-			// for some reason, this gets called when i'm sure that we don't have a layer mask enabled
-			// apatriawan NICE! this seems to work!
-
-			// apatriawan UPDATE: Seems like this really should just be reading the pixel mask.. the vec mask shouldn't be part of this as there's no channel data to read from?
-			// therefore, we should break out if this is actually a vec mask?
-			// the question is, why does m_LayerMaskData have a value when we don't have a pixel mask?
-			// We know it has garbo values.. where/when do the garbo values get loaded in if at all?
-			// TODO: apatriawan For now, simply use the vector mask to get the extents. must update this for contributing to emil's psd tools project
-	//		if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_LayerMask.has_value())
-			if (layerRecord.m_LayerMaskData.has_value() && layerRecord.m_LayerMaskData->m_VectorMask.has_value())
+			const auto& masks = *layerRecord.m_LayerMaskData;
+			const LayerRecords::LayerMask* mask = nullptr;
+			if (channel.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask)
 			{
-				const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_VectorMask.value();
-
-		//		 const LayerRecords::LayerMask mask = layerRecord.m_LayerMaskData.value().m_LayerMask.value();
-				// Generate our coordinates from the mask extents instead
-				coordinates = generateChannelCoordinates(ChannelExtents(mask.m_Top, mask.m_Left, mask.m_Bottom, mask.m_Right));
-				std::cout << "top: " << mask.m_Top << ", left: " <<  mask.m_Left <<", bottom: " << mask.m_Bottom << ", right: "<< mask.m_Right << std::endl; 
-				// apatriawan getting weird values of:
-				//  top: 0, left: 0, bottom: -16777216, right: 0
-				//  might be garbo values? 
+				if (masks.m_VectorMask) mask = &*masks.m_VectorMask;
+				else if (masks.m_LayerMask) mask = &*masks.m_LayerMask;
 			}
+			else if (channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask && masks.m_LayerMask)
+			{
+				mask = &*masks.m_LayerMask;
+			}
+			if (mask)
+				coordinates = generateChannelCoordinates(ChannelExtents(mask->m_Top, mask->m_Left, mask->m_Bottom, mask->m_Right));
 		}
+		if (coordinates.width < 0 || coordinates.height < 0)
+			throw std::runtime_error("Invalid PSD channel bounds");
+		const size_t pixelCount = static_cast<size_t>(coordinates.width) * static_cast<size_t>(coordinates.height);
+		const size_t bytesPerPixel = header.m_Depth == Enum::BitDepth::BD_8 ? sizeof(uint8_t)
+			: header.m_Depth == Enum::BitDepth::BD_16 ? sizeof(uint16_t)
+			: header.m_Depth == Enum::BitDepth::BD_32 ? sizeof(float32_t) : 0;
+		if (bytesPerPixel == 0 || pixelCount > buffer.max_size() / bytesPerPixel)
+			throw std::runtime_error("PSD channel is too large to allocate");
+		buffer.resize(pixelCount * bytesPerPixel);
 		// Get the compression of the channel. We must read it this way as the offset has to be correct before parsing
 		Enum::Compression channelCompression = Enum::Compression::ZipPrediction;
 		{
@@ -916,8 +883,8 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		FileSection::size(FileSection::size() + channel.m_Size);
 
 		if (header.m_Depth == Enum::BitDepth::BD_8)
-		{ // TODO: (apatriawan) the buffer size is dependent on the extents, which vector mask supposdely has
-			std::span<uint8_t> bufferSpan(buffer.data(), coordinates.width * coordinates.height);
+		{
+			std::span<uint8_t> bufferSpan(buffer.data(), pixelCount);
 			DecompressData<uint8_t>(stream, bufferSpan, channelOffset + 2u, channelCompression, header, coordinates.width, coordinates.height, channel.m_Size - 2u);
 			auto channelPtr = std::make_unique<channel_wrapper>(
 				channelCompression,
@@ -931,7 +898,7 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		}
 		else if (header.m_Depth == Enum::BitDepth::BD_16)
 		{
-			std::span<uint16_t> bufferSpan(reinterpret_cast<uint16_t*>(buffer.data()), coordinates.width * coordinates.height);
+			std::span<uint16_t> bufferSpan(reinterpret_cast<uint16_t*>(buffer.data()), pixelCount);
 			DecompressData<uint16_t>(stream, bufferSpan, channelOffset + 2u, channelCompression, header, coordinates.width, coordinates.height, channel.m_Size - 2u);
 			auto channelPtr = std::make_unique<channel_wrapper>(
 				channelCompression,
@@ -945,7 +912,7 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		}
 		if (header.m_Depth == Enum::BitDepth::BD_32)
 		{
-			std::span<float32_t> bufferSpan(reinterpret_cast<float32_t*>(buffer.data()), coordinates.width * coordinates.height);
+			std::span<float32_t> bufferSpan(reinterpret_cast<float32_t*>(buffer.data()), pixelCount);
 			DecompressData<float32_t>(stream, bufferSpan, channelOffset + 2u, channelCompression, header, coordinates.width, coordinates.height, channel.m_Size - 2u);
 			auto channelPtr = std::make_unique<channel_wrapper>(
 				channelCompression,
@@ -1050,28 +1017,40 @@ void LayerInfo::read(File& document, const FileHeader& header, ProgressCallback&
 
 	// Read the Channel Image Instances
 	std::vector<ChannelImageData> localResults(m_LayerRecords.size());
+	std::vector<std::exception_ptr> readErrors(m_LayerRecords.size());
 	std::for_each(std::execution::par, m_LayerRecords.begin(), m_LayerRecords.end(), [&](const LayerRecord& layerRecord)
 	{
-		callback.setTask("Reading Layer: " + std::string(layerRecord.m_LayerName.getString()));
 		size_t index = &layerRecord - &m_LayerRecords[0];
+		try
+		{
+			callback.setTask("Reading Layer: " + std::string(layerRecord.m_LayerName.getString()));
 
-		uint64_t tmpOffset = channelImageDataOffsets[index];
-		uint64_t tmpSize = channelImageDataSizes[index];
+			uint64_t tmpOffset = channelImageDataOffsets[index];
+			uint64_t tmpSize = channelImageDataSizes[index];
 
-		// Read the binary data. Note that this is done in one step to avoid the offset being set differently before 
-		// reading the data. We also do this within the loop to avoid allocating all the memory at once
-		ByteStream stream(document, tmpOffset, tmpSize);
+			// Read the binary data. Note that this is done in one step to avoid the offset being set differently before
+			// reading the data. We also do this within the loop to avoid allocating all the memory at once
+			ByteStream stream(document, tmpOffset, tmpSize);
 
-		// Create the ChannelImageData by parsing the given buffer
-		auto result = ChannelImageData();
-		result.read(stream, header, tmpOffset, layerRecord);
+			// Create the ChannelImageData by parsing the given buffer
+			auto result = ChannelImageData();
+			result.read(stream, header, tmpOffset, layerRecord);
 
-		// As each index is unique we do not need to worry about locking here
-		localResults[index] = std::move(result);
-		// Increment the callback
-		callback.setTask("Read Layer: " + std::string(layerRecord.m_LayerName.getString()));
-		callback.increment();
+			// As each index is unique we do not need to worry about locking here
+			localResults[index] = std::move(result);
+			// Increment the callback
+			callback.setTask("Read Layer: " + std::string(layerRecord.m_LayerName.getString()));
+			callback.increment();
+		}
+		catch (...)
+		{
+			// Exceptions escaping a parallel STL callback terminate the process.
+			// Return them to the caller so the importer can show its load error.
+			readErrors[index] = std::current_exception();
+		}
 	});
+	for (const auto& error : readErrors)
+		if (error) std::rethrow_exception(error);
 	// Combine results after the loop
 	m_ChannelImageData.insert(m_ChannelImageData.end(), std::make_move_iterator(localResults.begin()), std::make_move_iterator(localResults.end()));
 

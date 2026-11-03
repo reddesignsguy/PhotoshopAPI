@@ -29,6 +29,7 @@
 #include <optional>
 #include <string>
 #include <memory>
+#include <cmath>
 
 PSAPI_NAMESPACE_BEGIN
 
@@ -400,7 +401,7 @@ struct Layer : public MaskMixin<T>
 			{
 				std::cout << "apatriawan vector mask being read in layeredfile constructor" << std::endl;
 				auto pathResourcePtr = std::move(vector_mask_data->m_pathResourceData);
-				m_vectorMask = parseVectorMaskTaggedBlock(std::move(pathResourcePtr));
+				m_vectorMask = parseVectorMaskTaggedBlock(std::move(pathResourcePtr), header.m_Width, header.m_Height);
 			//	m_pathResourcesPtr = std::move(vector_mask_data->m_pathResourceData);
 				m_vecMaskFlags = vector_mask_data->m_flag;
 				
@@ -649,16 +650,15 @@ protected:
 		}
 	}
 
-	Geometry::Point2D<int> convertCoordsFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords) {
-		// TODO: Remove me
-		//double tmpX = ((preceding.x << 3) >> 3) / (double(1 << 24));
-		//double tmpY = ((preceding.y << 3) >> 3) / (double(1 << 24));
-
-		int canvasX = ((psdCoords.x << 3) >> 3)  / double(1 << 24) * width();
-	       	int canvasY = ((psdCoords.y << 3) >> 3)  / double(1 << 24) * height();
-
+	Geometry::Point2D<int> convertCoordsFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords,
+		uint32_t documentWidth, uint32_t documentHeight) {
+		// PSD knots are signed 8.24 coordinates relative to the document, even
+		// when the layer pixels are cropped, offset, or extend outside the canvas.
+		// Round to the nearest pixel so fixed-point quantization does not shift
+		// integer coordinates by a pixel on documents with arbitrary dimensions.
+		const int canvasX = static_cast<int>(std::lround(static_cast<int32_t>(psdCoords.x) / double(1 << 24) * documentWidth));
+		const int canvasY = static_cast<int>(std::lround(static_cast<int32_t>(psdCoords.y) / double(1 << 24) * documentHeight));
 		return Geometry::Point2D<int>(canvasX, canvasY);
-		return Geometry::Point2D<int>(canvasX, canvasY); 
 	}
        
 	// TODO: Update me
@@ -724,7 +724,8 @@ protected:
 	
 	// Essentially the reverse process of generate_vector_mask()
 	// WARNING: A bit "leetcodey"
-	std::unique_ptr<VectorMask> parseVectorMaskTaggedBlock(std::shared_ptr<PathResourceData> data)
+	std::unique_ptr<VectorMask> parseVectorMaskTaggedBlock(std::shared_ptr<PathResourceData> data,
+		uint32_t documentWidth, uint32_t documentHeight)
 	{
 		std::cout << "parsing vector mask tagged block" << std::endl;
 		// Convert the PathPoints of the vector mask from raw canvas coordiantes
@@ -766,7 +767,7 @@ protected:
 			}
 
 			if (auto subpathLengthRecord = std::dynamic_pointer_cast<SubpathLengthRecord>(record)) {
-				SubPath subpath = parseSubpathLengthRecord(data, subpathLengthRecord, it);
+				SubPath subpath = parseSubpathLengthRecord(data, subpathLengthRecord, it, documentWidth, documentHeight);
 				subpaths.push_back(subpath);
 				// no need to advance "it" here because parseSubpathLengthRecord() does it for us
 			}
@@ -785,7 +786,8 @@ protected:
 	// Returns the parsed subpath length record and the last vector position it reached
 	SubPath parseSubpathLengthRecord(const std::shared_ptr<PathResourceData> data
 			, const std::shared_ptr<SubpathLengthRecord> subpathLengthRecord
-			, std::vector<std::shared_ptr<IPathRecord>>::iterator& it)
+			, std::vector<std::shared_ptr<IPathRecord>>::iterator& it
+			, uint32_t documentWidth, uint32_t documentHeight)
 	{
 		bool closed = subpathLengthRecord->m_closed;
 		SubPath subPath(closed);
@@ -820,7 +822,7 @@ protected:
 					// throw std::runtime_error("The 'closed' value of this bezier knot length record must match the closed value of its corresponding subpath length record!");
 				}
 					
-				PathPoint point = parseBezierKnot(bezierKnotRecord);
+				PathPoint point = parseBezierKnot(bezierKnotRecord, documentWidth, documentHeight);
 				subPath.m_points.push_back(point);
 				// TODO: apatriawan validate the 'linked' property
 				// What happens if a record is linked but the preceidng and leaving are no collinear?
@@ -836,7 +838,8 @@ protected:
 		return subPath;
 	}
 
-	PathPoint parseBezierKnot(std::shared_ptr<BezierKnotRecord> record)
+	PathPoint parseBezierKnot(std::shared_ptr<BezierKnotRecord> record,
+		uint32_t documentWidth, uint32_t documentHeight)
 	{
 		auto pre_point = Geometry::Point2D<uint32_t>(record->m_preceding.x,
 							 record->m_preceding.y);
@@ -847,9 +850,9 @@ protected:
 		auto leav_point = Geometry::Point2D<uint32_t>(record->m_leaving.x,
 							 record->m_leaving.y);
 		// convert all coords
-		auto preceding = convertCoordsFromPsdToCanvas(pre_point);
-		auto anchor = convertCoordsFromPsdToCanvas(anc_point);
-		auto leaving = convertCoordsFromPsdToCanvas(leav_point);
+		auto preceding = convertCoordsFromPsdToCanvas(pre_point, documentWidth, documentHeight);
+		auto anchor = convertCoordsFromPsdToCanvas(anc_point, documentWidth, documentHeight);
+		auto leaving = convertCoordsFromPsdToCanvas(leav_point, documentWidth, documentHeight);
 		bool linked = record->m_linked;
 		return PathPoint(preceding, anchor, leaving, linked);
 	}
