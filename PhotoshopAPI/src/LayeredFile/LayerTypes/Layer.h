@@ -78,18 +78,18 @@ struct Layer : public MaskMixin<T>
 
 
 	struct PathPoint {
-		PathPoint(Geometry::Point2D<int> preceding,
-			  Geometry::Point2D<int> anchor,
-			  Geometry::Point2D<int> leaving,
+		PathPoint(Geometry::Point2D<double> preceding,
+			  Geometry::Point2D<double> anchor,
+			  Geometry::Point2D<double> leaving,
 			  bool linked)	
 				: m_preceding(preceding),
 				  m_anchor(anchor),
 				  m_leaving(leaving),
 				  m_linked(linked) {};
 
-		Geometry::Point2D<int> m_preceding;
-		Geometry::Point2D<int> m_anchor;
-		Geometry::Point2D<int> m_leaving;
+		Geometry::Point2D<double> m_preceding;
+		Geometry::Point2D<double> m_anchor;
+		Geometry::Point2D<double> m_leaving;
 
 		bool getLinked()
 		{
@@ -650,15 +650,15 @@ protected:
 		}
 	}
 
-	Geometry::Point2D<int> convertCoordsFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords,
+	Geometry::Point2D<double> convertCoordsFromPsdToCanvas(Geometry::Point2D<uint32_t> psdCoords,
 		uint32_t documentWidth, uint32_t documentHeight) {
 		// PSD knots are signed 8.24 coordinates relative to the document, even
 		// when the layer pixels are cropped, offset, or extend outside the canvas.
-		// Round to the nearest pixel so fixed-point quantization does not shift
-		// integer coordinates by a pixel on documents with arbitrary dimensions.
-		const int canvasX = static_cast<int>(std::lround(static_cast<int32_t>(psdCoords.x) / double(1 << 24) * documentWidth));
-		const int canvasY = static_cast<int>(std::lround(static_cast<int32_t>(psdCoords.y) / double(1 << 24) * documentHeight));
-		return Geometry::Point2D<int>(canvasX, canvasY);
+		// Keep the subpixel precision from Photoshop's signed 8.24 coordinates;
+		// rounding here distorts curves with short segments or fractional handles.
+		const double canvasX = static_cast<int32_t>(psdCoords.x) / double(1 << 24) * documentWidth;
+		const double canvasY = static_cast<int32_t>(psdCoords.y) / double(1 << 24) * documentHeight;
+		return Geometry::Point2D<double>(canvasX, canvasY);
 	}
        
 	// TODO: Update me
@@ -668,14 +668,14 @@ protected:
 	// signed, fixed point number with 8 bits before the binary point and 24 bits 
 	// after. Also, three guard bits exist. The range for each component is
 	// 0xF0000000 to 0x0FFFFFFF representing -16 to 16.
-	Geometry::Point2D<uint32_t> convertCoordsFromCanvasToPsd(Geometry::Point2D<int> canvasCoords) {
+	Geometry::Point2D<uint32_t> convertCoordsFromCanvasToPsd(Geometry::Point2D<double> canvasCoords) {
 
 		// Convert from int to doubles so division doesn't F up
 		double relativeX = (double)canvasCoords.x / width();
 		double relativeY = (double)canvasCoords.y / height();
 
-		int32_t finalX = (int32_t)(relativeX * (1 << 24));
-		int32_t finalY = (int32_t)(relativeY * (1 << 24));
+		int32_t finalX = static_cast<int32_t>(std::llround(relativeX * (1 << 24)));
+		int32_t finalY = static_cast<int32_t>(std::llround(relativeY * (1 << 24)));
 
 		return Geometry::Point2D<uint32_t>(finalX, finalY);
 	}
