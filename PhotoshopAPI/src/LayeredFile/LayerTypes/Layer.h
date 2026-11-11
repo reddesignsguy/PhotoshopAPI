@@ -25,6 +25,7 @@
 
 #include "Core/Geometry/Point.h"
 
+#include <algorithm>
 #include <vector>
 #include <optional>
 #include <string>
@@ -316,17 +317,22 @@ struct Layer : public MaskMixin<T>
 		m_CenterX = bbox.center().x;
 		m_CenterY = bbox.center().y;
 
-		// Move the layer mask into our layerMask struct, for now this only does pixel masks
+		// Prefer the original raster mask (-2). The additional -3 mask can
+		// be an empty composite, so its presence must not override -2.
+		const bool useRealMask = layerRecord.m_LayerMaskData &&
+			!layerRecord.m_LayerMaskData->m_LayerMask && layerRecord.m_LayerMaskData->m_RealMask;
+		const auto maskIndex = useRealMask ? MaskMixin<T>::s_real_mask_index : MaskMixin<T>::s_mask_index;
 		for (int i = 0; i < layerRecord.m_ChannelCount; ++i)
 		{
 			auto& channelInfo = layerRecord.m_ChannelInformation[i];
-			if (channelInfo.m_ChannelID == MaskMixin<T>::s_mask_index)
+			if (channelInfo.m_ChannelID == maskIndex)
 			{
-				std::cout << "found channel id = -2" << std::endl;
 				// Move the compressed image data into our LayerMask struct
 				auto channelPtr = channelImageData.extract_image_ptr(channelInfo.m_ChannelID);
 				if (channelPtr)
 				{
+					// The public mask representation writes a single raster channel (-2).
+					channelPtr->channel_id_info(MaskMixin<T>::s_mask_index);
 					MaskMixin<T>::m_MaskData = std::move(channelPtr);
 				}
 				else
@@ -342,11 +348,12 @@ struct Layer : public MaskMixin<T>
 				auto& maskParams = layerRecord.m_LayerMaskData.value();
 
 				// Read the mask parameters
-				if (!maskParams.m_LayerMask.has_value())
+				const auto& selectedMask = useRealMask ? maskParams.m_RealMask : maskParams.m_LayerMask;
+				if (!selectedMask.has_value())
 				{
 					continue;
 				}
-				auto& layerMaskParams = maskParams.m_LayerMask.value();
+				const auto& layerMaskParams = selectedMask.value();
 
 				MaskMixin<T>::mask_disabled(layerMaskParams.m_Disabled);
 				MaskMixin<T>::mask_relative_to_layer(layerMaskParams.m_PositionRelativeToLayer);
@@ -366,11 +373,6 @@ struct Layer : public MaskMixin<T>
 					m_CenterX = mask_bbox.center().x;
 					m_CenterY = mask_bbox.center().y;					
 				}
-			}
-			else if (channelInfo.m_ChannelID == MaskMixin<T>::s_real_mask_index) // TODO change me
-			{
-
-				std::cout << "found channel id = -3" << std::endl;
 			}
 		}
 		

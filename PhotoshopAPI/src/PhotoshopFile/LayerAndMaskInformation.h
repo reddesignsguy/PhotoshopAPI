@@ -137,10 +137,13 @@ namespace LayerRecords
 	{
 		std::optional<LayerMask> m_LayerMask = std::nullopt;
 		std::optional<LayerMask> m_VectorMask = std::nullopt;
+		// The second rectangle belongs to channel -3. It must not replace the
+		// first rectangle (-2), even when the first mask is a raster mask.
+		std::optional<LayerMask> m_RealMask = std::nullopt;
 
 		LayerMaskData() = default;
 
-		void read(File& document);
+		void read(File& document, bool hasRealMask = false);
 		// Write the layer masks, currently only a single LayerMask is supported for this
 		void write(File& document) const;
 	};

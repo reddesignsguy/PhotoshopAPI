@@ -225,114 +225,70 @@ uint32_t LayerRecords::LayerMask::writeMaskParams(File& document) const noexcept
 
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
-void LayerRecords::LayerMaskData::read(File& document)
+void LayerRecords::LayerMaskData::read(File& document, bool hasRealMask)
 {
 	FileSection::size(static_cast<uint64_t>(ReadBinaryData<uint32_t>(document)) + 4u);
 	int64_t toRead = FileSection::size<int64_t>() - 4u;
+	if (toRead == 0) return;
+	if (toRead < 18)
+		PSAPI_LOG_ERROR("LayerMaskData", "Truncated mask rectangle");
 
-	// Empty section;
-	if (toRead == 0)
+	LayerMask mask;
+	mask.m_Top = ReadBinaryData<int32_t>(document);
+	mask.m_Left = ReadBinaryData<int32_t>(document);
+	mask.m_Bottom = ReadBinaryData<int32_t>(document);
+	mask.m_Right = ReadBinaryData<int32_t>(document);
+	mask.m_DefaultColor = ReadBinaryData<uint8_t>(document);
+	mask.setFlags(ReadBinaryData<uint8_t>(document));
+	toRead -= 18;
+	if (mask.m_DefaultColor != 0 && mask.m_DefaultColor != 255)
+		PSAPI_LOG_ERROR("LayerMaskData", "Layer Mask default color can only be 0 or 255, not %u", mask.m_DefaultColor);
+
+	// Photoshop writes the real mask header BEFORE the optional parameters.
+	// Its presence is determined by channel -3, not the block length: the
+	// parameters alone can occupy as many bytes as another mask header.
+	if (hasRealMask)
 	{
-		return;
+		if (toRead < 18)
+			PSAPI_LOG_ERROR("LayerMaskData", "Truncated real mask rectangle");
+		LayerMask realMask;
+		realMask.setFlags(ReadBinaryData<uint8_t>(document));
+		realMask.m_DefaultColor = ReadBinaryData<uint8_t>(document);
+		realMask.m_Top = ReadBinaryData<int32_t>(document);
+		realMask.m_Left = ReadBinaryData<int32_t>(document);
+		realMask.m_Bottom = ReadBinaryData<int32_t>(document);
+		realMask.m_Right = ReadBinaryData<int32_t>(document);
+		toRead -= 18;
+		if (realMask.m_DefaultColor != 0 && realMask.m_DefaultColor != 255)
+			PSAPI_LOG_ERROR("LayerMaskData", "Layer Mask default color can only be 0 or 255, not %u", realMask.m_DefaultColor);
+		m_RealMask = realMask;
 	}
 
-	// Use this to make sure we only read one set of mask parameters
-	bool hasMaskParams = false;
-
-	// Read the first layer mask, we dont yet know which one it is
+	if (mask.m_HasMaskParams)
 	{
-		
-		std::cout << "apatriawan this should be called cuz im a vmsk"<< std::endl;
-		LayerMask mask = LayerMask();
-
-		mask.m_Top = ReadBinaryData<int32_t>(document);
-		mask.m_Left = ReadBinaryData<int32_t>(document);
-		mask.m_Bottom = ReadBinaryData<int32_t>(document);
-		mask.m_Right = ReadBinaryData<int32_t>(document);
-		toRead -= 16u;
-
-		mask.m_DefaultColor = ReadBinaryData<uint8_t>(document);
-		if (mask.m_DefaultColor != 0 && mask.m_DefaultColor != 255)
-		{
-			PSAPI_LOG_ERROR("LayerMaskData", "Layer Mask default color can only be 0 or 255, not %u", mask.m_DefaultColor);
-		}
-		toRead -= 1u;
-
-
-		const uint8_t bitFlags = ReadBinaryData<uint8_t>(document);
-		mask.setFlags(bitFlags); // apatriawan = x18 or 0001 0010
-		toRead -= 1u;
-
-		// Store this value to compare against later
-		hasMaskParams = mask.m_HasMaskParams;
-		if (hasMaskParams && FileSection::size() <= 28)
-		{
-			const uint8_t maskParams = ReadBinaryData<uint8_t>(document);
-			mask.setMaskParams(maskParams);
-			toRead -= 1u;
-			toRead -= mask.readMaskParams(document);
-		}
-		
-		// TODO: Check me (apatriawan)
-		// Depending on the flags this is either a vector or layer mask
-		if ((bitFlags & 1u << 3) != 0u)
-		{
-		std::cout << "apatriawan this should be called cuz im a vmsk"<< std::endl;
-
-		std::cout << "i think this means bit 4 is enabled" << std::endl;
-			m_VectorMask.emplace(mask);
-		}
-		else
-		{
-		// apatriawan looks like debugger tries to go here, but it never prints this.. so i guess that's good?
-		std::cout << "ruh roh, why does it think we have a layer mask" << std::endl;
-			m_LayerMask.emplace(mask);
-		}
+		if (toRead < 1)
+			PSAPI_LOG_ERROR("LayerMaskData", "Missing mask parameters");
+		const auto flags = ReadBinaryData<uint8_t>(document);
+		--toRead;
+		const int parameterBytes = ((flags & 1) ? 1 : 0) + ((flags & 2) ? 8 : 0)
+			+ ((flags & 4) ? 1 : 0) + ((flags & 8) ? 8 : 0);
+		if (toRead < parameterBytes)
+			PSAPI_LOG_ERROR("LayerMaskData", "Truncated mask parameters");
+		mask.setMaskParams(flags);
+		toRead -= mask.readMaskParams(document);
 	}
-
-	// Check if there is still enough space left to read another section
-	// If there is 2 masks the vector mask will always be first, therefore we push 
-	// back into the real user mask instead (pixel mask)
-	if (toRead >= 18u)
+	if (m_RealMask)
 	{
-		// apatriawan looks like this gets evaluated. perhaps we have 2 masks?
-		// i wonder where the data is coming from
-		LayerMask layerMask = LayerMask();
-
-		const uint8_t bitFlags = ReadBinaryData<uint8_t>(document);
-		// apatriawan flags are 0xf
-		layerMask.setFlags(bitFlags);
-		toRead -= 1u;
-
-		layerMask.m_DefaultColor = ReadBinaryData<uint8_t>(document);
-		if (layerMask.m_DefaultColor != 0 && layerMask.m_DefaultColor != 255)
-		{
-			PSAPI_LOG_ERROR("LayerMaskData", "Layer Mask default color can only be 0 or 255, not %u", layerMask.m_DefaultColor);
-		}
-		toRead -= 1u;
-
-		layerMask.m_Top = ReadBinaryData<int32_t>(document);
-		layerMask.m_Left = ReadBinaryData<int32_t>(document);
-		layerMask.m_Bottom = ReadBinaryData<int32_t>(document);
-		layerMask.m_Right = ReadBinaryData<int32_t>(document);
-		toRead -= 16u;
-
-		if (hasMaskParams || layerMask.m_HasMaskParams)
-		{
-			const uint8_t maskParams = ReadBinaryData<uint8_t>(document);
-			layerMask.setMaskParams(maskParams);
-			toRead -= 1u;
-			toRead -= layerMask.readMaskParams(document);
-		}
-		std::cout << "apatriawan layer mask coming in!" << std::endl;
-		m_LayerMask.emplace(layerMask);
+		m_RealMask->m_HasUserMaskDensity = mask.m_HasUserMaskDensity;
+		m_RealMask->m_HasUserMaskFeather = mask.m_HasUserMaskFeather;
+		m_RealMask->m_UserMaskDensity = mask.m_UserMaskDensity;
+		m_RealMask->m_UserMaskFeather = mask.m_UserMaskFeather;
 	}
+	if (mask.m_IsVector) m_VectorMask = mask;
+	else m_LayerMask = mask;
 
-	if (toRead < 0 || toRead > 2)
-	{
-		PSAPI_LOG_WARNING("LayerMaskData", "Expected either 0 or 2 padding bytes, got %i instead", toRead);
-	}
-
+	if (toRead > 3)
+		PSAPI_LOG_WARNING("LayerMaskData", "Expected up to 3 padding bytes, got %i instead", toRead);
 	document.skip(toRead);
 }
 
@@ -578,7 +534,9 @@ void LayerRecord::read(File& document, const FileHeader& header, ProgressCallbac
 	int32_t toRead = extraDataLen;
 	{
 		LayerRecords::LayerMaskData layerMaskSection = LayerRecords::LayerMaskData{};
-		layerMaskSection.read(document);
+		const bool hasRealMask = std::any_of(m_ChannelInformation.begin(), m_ChannelInformation.end(),
+			[](const auto& channel) { return channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask; });
+		layerMaskSection.read(document, hasRealMask);
 		if (layerMaskSection.size() > 4u)
 		{
 			m_LayerMaskData.emplace(layerMaskSection);
@@ -844,7 +802,7 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 		ChannelCoordinates coordinates = generateChannelCoordinates(ChannelExtents(layerRecord.m_Top, layerRecord.m_Left, layerRecord.m_Bottom, layerRecord.m_Right));
 
 		// Channel -2 uses the first mask rectangle (the rasterized vector
-		// mask when present); channel -3 uses the separate real pixel mask.
+		// mask when present); channel -3 uses the separate real mask rectangle.
 		if (layerRecord.m_LayerMaskData)
 		{
 			const auto& masks = *layerRecord.m_LayerMaskData;
@@ -854,9 +812,9 @@ void ChannelImageData::read(ByteStream& stream, const FileHeader& header, const 
 				if (masks.m_VectorMask) mask = &*masks.m_VectorMask;
 				else if (masks.m_LayerMask) mask = &*masks.m_LayerMask;
 			}
-			else if (channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask && masks.m_LayerMask)
+			else if (channel.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask && masks.m_RealMask)
 			{
-				mask = &*masks.m_LayerMask;
+				mask = &*masks.m_RealMask;
 			}
 			if (mask)
 				coordinates = generateChannelCoordinates(ChannelExtents(mask->m_Top, mask->m_Left, mask->m_Bottom, mask->m_Right));

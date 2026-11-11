@@ -127,7 +127,8 @@ public:
 			auto& channel_info = layer_record.m_ChannelInformation[i];
 
 			// We already extract masks ahead of time in ctor of Layer<T> and skip them here to avoid raising warnings
-			if (channel_info.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask) continue;
+			if (channel_info.m_ChannelID.id == Enum::ChannelID::UserSuppliedLayerMask ||
+				channel_info.m_ChannelID.id == Enum::ChannelID::RealUserSuppliedLayerMask) continue;
 
 			auto channelPtr = channel_image_data.extract_image_ptr(channel_info.m_ChannelID);
 			// Pointers might have already been released previously
