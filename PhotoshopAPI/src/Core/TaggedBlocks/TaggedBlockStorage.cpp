@@ -17,9 +17,9 @@
 #include "ReferencePointTaggedBlock.h"
 #include "UnicodeLayerNameTaggedBlock.h"
 #include "VectorMaskTaggedBlock.h"
+#include "ShapeFillTaggedBlock.h"
 
 PSAPI_NAMESPACE_BEGIN
-
 
 // ---------------------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------------------
@@ -208,7 +208,16 @@ const std::shared_ptr<TaggedBlock> TaggedBlockStorage::readTaggedBlock(File& doc
 			this->m_TaggedBlocks.push_back(lrLinkedTaggedBlock);
 			return lrLinkedTaggedBlock;
 		}
-		else if (taggedBlock.value() == Enum::TaggedBlockKey::vecMaskSettings)
+		else if (taggedBlock.value() == Enum::TaggedBlockKey::adjSolidColor ||
+		         taggedBlock.value() == Enum::TaggedBlockKey::vecStrokeContentData)
+		{
+			auto fill = std::make_shared<ShapeFillTaggedBlock>();
+			fill->read(document, header, offset, signature, *taggedBlock, padding);
+			m_TaggedBlocks.push_back(fill);
+			return fill;
+		}
+		else if (taggedBlock.value() == Enum::TaggedBlockKey::vecMaskSettings ||
+		         taggedBlock.value() == Enum::TaggedBlockKey::vecMaskSettingsCS6)
 		{
 			auto vecMaskTaggedBlock = std::make_shared<VectorMaskTaggedBlock>();
 			vecMaskTaggedBlock->read(document, header, offset, taggedBlock.value(), signature, padding);

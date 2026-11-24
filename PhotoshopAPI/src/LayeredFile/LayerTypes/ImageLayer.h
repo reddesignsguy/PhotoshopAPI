@@ -25,7 +25,7 @@ PSAPI_NAMESPACE_BEGIN
 
 template <typename T>
 	requires concepts::bit_depth<T>
-struct ImageLayer final : public Layer<T>, public WritableImageDataMixin<T>
+struct ImageLayer : public Layer<T>, public WritableImageDataMixin<T>
 {
 	using typename Layer<T>::value_type;
 	using typename WritableImageDataMixin<T>::data_type;

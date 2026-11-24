@@ -819,7 +819,8 @@ namespace Enum
 		lrReferencePoint,
 		// Shape Layer Tagged Blocks
 		vecOriginData,
-		vecMaskSettings,	// 'vmsk' for CS6 and up. We dont support the legacy 'vsms' option here 
+		vecMaskSettings,
+		vecMaskSettingsCS6,
 		vecStrokeData,
 		vecStrokeContentData,
 	};
@@ -890,6 +891,7 @@ namespace Enum
 			// Vector Data for shape Layers
 			{"vogk", TaggedBlockKey::vecOriginData},
 			{"vmsk", TaggedBlockKey::vecMaskSettings},
+			{"vsms", TaggedBlockKey::vecMaskSettingsCS6},
 			{"vstk", TaggedBlockKey::vecStrokeData},
 			{"vscg", TaggedBlockKey::vecStrokeContentData},
 		};

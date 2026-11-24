@@ -61,6 +61,22 @@ namespace _Impl
 		}
 
 #define CHECK_TAGGED_BLOCK(tag) additionalLayerInfo.getTaggedBlock<TaggedBlock>(tag).has_value()
+		using Key = Enum::TaggedBlockKey;
+		if (additionalLayerInfo.get_tagged_block<VectorMaskTaggedBlock>() &&
+		    (CHECK_TAGGED_BLOCK(Key::adjSolidColor) || CHECK_TAGGED_BLOCK(Key::adjGradient) ||
+		     CHECK_TAGGED_BLOCK(Key::adjPattern) || CHECK_TAGGED_BLOCK(Key::vecStrokeContentData) ||
+		     CHECK_TAGGED_BLOCK(Key::vecStrokeData)))
+		{
+			auto shape = std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
+			for (auto key : {Key::adjSolidColor, Key::vecStrokeContentData})
+			{
+				auto block = additionalLayerInfo.getTaggedBlock<TaggedBlock>(key);
+				if (!block) continue;
+				auto fill = std::dynamic_pointer_cast<ShapeFillTaggedBlock>(*block);
+				if (fill && fill->rgb) { shape->solid_fill_rgb = fill->rgb; break; }
+			}
+			return shape;
+		}
 		if (CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::adjBlackandWhite) ||
 			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::adjGradient) ||
 			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::adjInvert) ||
@@ -84,14 +100,6 @@ namespace _Impl
 		{
 			return std::make_shared<AdjustmentLayer<T>>();
 		}
-// TODO Verify this is true because a few other layer types can still have these attributes
-//		if (CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecOriginData) ||
-//			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecMaskSettings) ||
-//			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeData) ||
-//			CHECK_TAGGED_BLOCK(Enum::TaggedBlockKey::vecStrokeContentData))
-//		{
-//			return std::make_shared<ShapeLayer<T>>(layerRecord, channelImageData, header);
-//		}
 #undef CHECK_TAGGED_BLOCK
 
 		return std::make_shared<ImageLayer<T>>(layerRecord, channelImageData, header);
